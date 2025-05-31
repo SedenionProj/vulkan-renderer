@@ -16,6 +16,7 @@ add_executable(VkRenderer ${SOURCES})
 
 find_package(Vulkan REQUIRED)
 target_include_directories (VkRenderer PUBLIC 
+    ${CMAKE_SOURCE_DIR}/VkRenderer
     ${VULKAN_INCLUDE_DIRS}
     ${GLM_INCLUDE}
 )
