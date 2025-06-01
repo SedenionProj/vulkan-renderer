@@ -1,10 +1,19 @@
 #include "src/vulkan/swapchain.hpp"
 #include "src/vulkan/texture.hpp"
+#include "src/vulkan/window.hpp"
+#include "src/vulkan/context.hpp"
+#include "src/vulkan/device.hpp"
+#include "src/vulkan/commandBuffer.hpp"
 
 Swapchain::Swapchain(std::shared_ptr<Context> ctx, std::shared_ptr<Window> window, std::shared_ptr<Device> device)
 	: m_ctx(ctx), m_window(window), m_device(device) {
 	if (glfwCreateWindowSurface(ctx->getInstance(), window->getHandle(), nullptr, &m_surface) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create window surface");
+	}
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		m_frameData[i].commandPool = std::make_shared<CommandPool>(device);
+		m_frameData[i].commandBuffer = std::make_shared<CommandBuffer>(m_frameData[i].commandPool->getHandle());
 	}
 	//VkBool32 presentSupport = false;
 	//vkGetPhysicalDeviceSurfaceSupportKHR(device->getPhysicalDevice().get(), i, m_surface, &presentSupport);
@@ -16,6 +25,39 @@ Swapchain::~Swapchain()
 	vkDestroySwapchainKHR(m_device->getHandle(), m_swapchain, nullptr);
 
 	vkDestroySurfaceKHR(m_ctx->getInstance(), m_surface, nullptr);
+}
+
+void Swapchain::present()
+{
+	/*
+	VkSemaphore waitSemaphores[MAX_FRAMES_IN_FLIGHT];
+
+	for (FrameData& data : m_frameData)
+	{
+		data.commandBuffer->
+	}
+	*/
+	
+	VkSemaphore waitSemaphore = getCurrentCommandBuffer()->m_renderFinishedSemaphores->getHandle();
+
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &waitSemaphore;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &m_swapchain;
+	presentInfo.pImageIndices = &m_currentImageIndex;
+
+	VkResult result = vkQueuePresentKHR(m_device->m_presentQueue, &presentInfo);
+
+	m_currentFrameIndex = (m_currentFrameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
+
+}
+
+void Swapchain::acquireNexImage()
+{
+	vkAcquireNextImageKHR(m_device->getHandle(), m_swapchain, UINT64_MAX,getCurrentCommandBuffer()->m_imageAvailableSemaphores->getHandle(), VK_NULL_HANDLE, &m_currentImageIndex);
+
 }
 
 void Swapchain::createSwapchain() {

@@ -1,4 +1,5 @@
 #include "src/vulkan/pipeline.hpp"
+#include "src/vulkan/device.hpp"
 
 Pipeline::Pipeline(std::shared_ptr<Shader> shader, std::shared_ptr<Swapchain> swapchain, std::shared_ptr<RenderPass> renderPass)
 	: m_swapchain(swapchain), m_shader(shader), m_renderPass(renderPass) {

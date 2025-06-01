@@ -1,4 +1,5 @@
 #include "src/vulkan/renderPass.hpp"
+#include "src/vulkan/device.hpp"
 
 RenderPass::RenderPass() {
 	createRenderPass();
