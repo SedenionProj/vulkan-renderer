@@ -34,7 +34,7 @@ public:
 	void updateViewport(uint32_t width, uint32_t height);
 
 	void reset();
-	void submit(std::shared_ptr<Device> device);
+	void submit(std::shared_ptr<Device> device, bool semaphores = true);
 
 	std::shared_ptr<Fence> getFence() { return m_fence; }
 

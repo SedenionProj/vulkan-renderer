@@ -21,8 +21,8 @@ CommandBuffer::CommandBuffer(VkCommandPool commandPool)
 	: m_commandPool(commandPool) {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.commandPool = m_commandPool;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandPool = m_commandPool;
 	allocInfo.commandBufferCount = 1;
 
 	if (vkAllocateCommandBuffers(Device::getHandle(), &allocInfo, &m_handle) != VK_SUCCESS) {
@@ -35,12 +35,13 @@ CommandBuffer::CommandBuffer(VkCommandPool commandPool)
 }
 
 CommandBuffer::~CommandBuffer() {
-
+	vkFreeCommandBuffers(Device::getHandle(), m_commandPool, 1, &m_handle);
 }
 
 void CommandBuffer::beginRecording() {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
 	if (vkBeginCommandBuffer(m_handle, &beginInfo) != VK_SUCCESS) {
 		throw std::runtime_error("failed to begin recording command buffer");
@@ -82,7 +83,7 @@ void CommandBuffer::reset()
 	vkResetCommandBuffer(m_handle, 0);
 }
 
-void CommandBuffer::submit(std::shared_ptr<Device> device)
+void CommandBuffer::submit(std::shared_ptr<Device> device, bool semaphores)
 {
 	VkSemaphore waitSemaphore = m_imageAvailableSemaphores->getHandle();
 	VkSemaphore signalSemaphore = m_renderFinishedSemaphores->getHandle();
@@ -91,13 +92,19 @@ void CommandBuffer::submit(std::shared_ptr<Device> device)
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &waitSemaphore;
-	submitInfo.pWaitDstStageMask = waitStages;
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &signalSemaphore;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &m_handle;
+	if (semaphores) {
+		submitInfo.waitSemaphoreCount = 1;
+		submitInfo.pWaitSemaphores = &waitSemaphore;
+		submitInfo.pWaitDstStageMask = waitStages;
+		submitInfo.signalSemaphoreCount = 1;
+		submitInfo.pSignalSemaphores = &signalSemaphore;
+	}
+	
+	
+
+	m_fence->reset();
 
 	if (vkQueueSubmit(device->m_graphicsQueue, 1, &submitInfo, m_fence->getHandle()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");

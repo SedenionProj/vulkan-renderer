@@ -36,12 +36,28 @@ Shader::Shader() {
 	fragShaderStageInfo.module = fragShaderModule;
 	fragShaderStageInfo.pName = "main";
 
-	shaderStages[0] = vertShaderStageInfo;
-	shaderStages[1] = fragShaderStageInfo;
+	m_shaderStages[0] = vertShaderStageInfo;
+	m_shaderStages[1] = fragShaderStageInfo;
+
+	// temp
+	m_attributeDescriptions.resize(2);
+	m_attributeDescriptions[0].binding = 0;
+	m_attributeDescriptions[0].location = 0;
+	m_attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+	m_attributeDescriptions[0].offset = offsetof(Vertex, Vertex::pos);
+
+	m_attributeDescriptions[1].binding = 0;
+	m_attributeDescriptions[1].location = 1;
+	m_attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+	m_attributeDescriptions[1].offset = offsetof(Vertex, Vertex::color);
+	m_vertexInputStride = sizeof(Vertex);
+
+	createPipelineLayout();
 }
 
 Shader::~Shader()
 {
+	vkDestroyDescriptorSetLayout(Device::getHandle(), m_descriptorSetLayout, nullptr);
 
 }
 
@@ -56,4 +72,32 @@ VkShaderModule Shader::createShaderModule(const std::vector<char>& code) {
 	}
 
 	return shaderModule;
+}
+
+void Shader::createPipelineLayout() {
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &uboLayoutBinding;
+
+	if (vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create descriptor set layout!");
+	}
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+	if (vkCreatePipelineLayout(Device::getHandle(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create pipeline layout!");
+	}
 }

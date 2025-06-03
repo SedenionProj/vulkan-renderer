@@ -32,10 +32,17 @@ Fence::~Fence()
 
 void Fence::wait()
 {
-	vkWaitForFences(Device::getHandle(), 1, &m_handle, VK_TRUE, UINT64_MAX);
+	if (vkWaitForFences(Device::getHandle(), 1, &m_handle, VK_TRUE, UINT64_MAX) == VK_SUCCESS) {
+		m_signaled = true;
+	}
+	else {
+		m_signaled = false;
+	}
 }
 
 void Fence::reset()
 {
-	vkResetFences(Device::getHandle(), 1, &m_handle);
+	if (m_signaled)
+		vkResetFences(Device::getHandle(), 1, &m_handle);
+	m_signaled = false;
 }

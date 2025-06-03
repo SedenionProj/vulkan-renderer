@@ -20,9 +20,13 @@ public:
 
 	VkFence getHandle() { return m_handle; }
 
+	bool isSignaled() { return m_signaled; }
+
 	void wait();
 	void reset();
 
 private:
 	VkFence m_handle;
+
+	bool m_signaled= true;
 };
