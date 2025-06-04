@@ -39,6 +39,11 @@ void Buffer::createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPrope
 	vkBindBufferMemory(Device::getHandle(), buffer, bufferMemory, 0);
 }
 
+void Buffer::createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties)
+{
+	createBuffer(size, usage, properties, m_handle, m_memory);
+}
+
 void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
 	CommandPool commandPool(m_device);
 	CommandBuffer commandBuffer(commandPool.getHandle());
@@ -83,6 +88,7 @@ VertexBuffer::VertexBuffer(std::shared_ptr<Device> device, uint32_t size, const 
 		stagingBufferMemory
 	);
 
+	// todo
 	void* data;
 	vkMapMemory(Device::getHandle(), stagingBufferMemory, 0, bufferSize, 0, &data);
 	memcpy(data, vData, (size_t)bufferSize);

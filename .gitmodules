@@ -4,3 +4,6 @@
 [submodule "VkRenderer/vendor/glm"]
 	path = VkRenderer/vendor/glm
 	url = https://github.com/g-truc/glm
+[submodule "VkRenderer/vendor/stb"]
+	path = VkRenderer/vendor/stb
+	url = https://github.com/nothings/stb

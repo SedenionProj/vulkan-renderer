@@ -6,3 +6,6 @@ add_subdirectory(glfw)
 
 # glm
 set(GLM_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/glm PARENT_SCOPE)
+
+# stb
+set(STB_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/stb PARENT_SCOPE)

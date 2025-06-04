@@ -25,9 +25,10 @@ void Pipeline::createGraphicsPipeline() {
 	dynamicState.pDynamicStates = dynamicStates.data();
 
 	// vertex
-	VkVertexInputBindingDescription bindingDescription{};
+	VkVertexInputBindingDescription bindingDescription{}; // todo: move
 	bindingDescription.binding = 0;
 	bindingDescription.stride = m_shader->getVertexInputStride();
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};

@@ -40,7 +40,7 @@ Shader::Shader() {
 	m_shaderStages[1] = fragShaderStageInfo;
 
 	// temp
-	m_attributeDescriptions.resize(2);
+	m_attributeDescriptions.resize(3);
 	m_attributeDescriptions[0].binding = 0;
 	m_attributeDescriptions[0].location = 0;
 	m_attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -50,6 +50,12 @@ Shader::Shader() {
 	m_attributeDescriptions[1].location = 1;
 	m_attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 	m_attributeDescriptions[1].offset = offsetof(Vertex, Vertex::color);
+
+	m_attributeDescriptions[2].binding = 0;
+	m_attributeDescriptions[2].location = 2;
+	m_attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+	m_attributeDescriptions[2].offset = offsetof(Vertex, Vertex::texCoord);
+
 	m_vertexInputStride = sizeof(Vertex);
 
 	createPipelineLayout();
@@ -81,10 +87,19 @@ void Shader::createPipelineLayout() {
 	uboLayoutBinding.descriptorCount = 1;
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
+	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+	samplerLayoutBinding.binding = 1;
+	samplerLayoutBinding.descriptorCount = 1;
+	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerLayoutBinding.pImmutableSamplers = nullptr;
+	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+
 	VkDescriptorSetLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = 1;
-	layoutInfo.pBindings = &uboLayoutBinding;
+	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutInfo.pBindings = bindings.data();
 
 	if (vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create descriptor set layout!");

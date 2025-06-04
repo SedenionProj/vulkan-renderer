@@ -19,6 +19,7 @@ target_include_directories (VkRenderer PUBLIC
     ${CMAKE_SOURCE_DIR}/VkRenderer
     ${VULKAN_INCLUDE_DIRS}
     ${GLM_INCLUDE}
+    ${STB_INCLUDE}
 )
 target_link_libraries(VkRenderer 
     Vulkan::Vulkan
