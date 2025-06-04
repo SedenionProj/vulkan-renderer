@@ -35,22 +35,66 @@ Texture2D::Texture2D(std::shared_ptr<Device> device, std::filesystem::path path)
 
 	stbi_image_free(pixels);
 
-	// create image
+	createImage(
+		VK_FORMAT_R8G8B8A8_SRGB,
+		VK_IMAGE_TILING_OPTIMAL,
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
+	);
+
+	// copy
+	transitionImageLayout(m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	copyBufferToImage(stagingBuffer.getHandle(), m_image, m_width, m_height);
+	transitionImageLayout(m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	createImageView(VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	createSampler();
+}
+
+Texture2D::Texture2D(std::shared_ptr<Device> device, uint32_t width, uint32_t height)
+	 : m_device(device), m_width(width), m_height(height) {}
+
+Texture2D::~Texture2D()
+{
+	vkDestroySampler(Device::getHandle(), m_sampler, nullptr);
+	vkDestroyImageView(Device::getHandle(), m_imageView, nullptr);
+	vkDestroyImage(Device::getHandle(), m_image, nullptr);
+	vkFreeMemory(Device::getHandle(), m_imageMemory, nullptr);
+}
+
+void Texture2D::createImageView(VkFormat format, VkImageAspectFlags aspectFlags) {
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = m_image;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = format;
+	viewInfo.subresourceRange.aspectMask = aspectFlags;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = 1;
+
+	if (vkCreateImageView(Device::getHandle(), &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create texture image view!");
+	}
+}
+
+void Texture2D::createImage(VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) {
 	VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = static_cast<uint32_t>(width);
-	imageInfo.extent.height = static_cast<uint32_t>(height);
+	imageInfo.extent.width = m_width;
+	imageInfo.extent.height = m_height;
 	imageInfo.extent.depth = 1;
 	imageInfo.mipLevels = 1;
 	imageInfo.arrayLayers = 1;
-	imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.format = format;
+	imageInfo.tiling = tiling;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.usage = usage;
 	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-	imageInfo.flags = 0; // Optional
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	if (vkCreateImage(Device::getHandle(), &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create image!");
@@ -62,45 +106,13 @@ Texture2D::Texture2D(std::shared_ptr<Device> device, std::filesystem::path path)
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = stagingBuffer.findMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT); // todo: move the function to physical device...
+	allocInfo.memoryTypeIndex = m_device->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
 
 	if (vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate image memory!");
 	}
 
 	vkBindImageMemory(Device::getHandle(), m_image, m_imageMemory, 0);
-
-	// copy
-	transitionImageLayout(m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	copyBufferToImage(stagingBuffer.getHandle(), m_image, m_width, m_height);
-	transitionImageLayout(m_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	// create image view
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = m_image;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
-	viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = 1;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
-
-	if (vkCreateImageView(Device::getHandle(), &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create texture image view!");
-	}
-
-	// create sampler
-	createSampler();
-}
-
-Texture2D::~Texture2D()
-{
-	vkDestroySampler(Device::getHandle(), m_sampler, nullptr);
-	vkDestroyImageView(Device::getHandle(), m_imageView, nullptr);
-	vkDestroyImage(Device::getHandle(), m_image, nullptr);
-	vkFreeMemory(Device::getHandle(), m_imageMemory, nullptr);
 }
 
 void Texture2D::createSampler() {

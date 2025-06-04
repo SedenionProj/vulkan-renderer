@@ -13,8 +13,6 @@ public:
 	void createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties);
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
-	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-
 	VkBuffer getHandle() { return m_handle; }
 	VkDeviceMemory getMemory() { return m_memory; }
 protected:

@@ -12,7 +12,7 @@ Framebuffer::Framebuffer(const std::vector< std::shared_ptr<Texture2D>>& texture
 	VkFramebufferCreateInfo framebufferInfo{};
 	framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	framebufferInfo.renderPass = renderPass->getHandle();
-	framebufferInfo.attachmentCount = 1;
+	framebufferInfo.attachmentCount = static_cast<uint32_t>(attachments.size());
 	framebufferInfo.pAttachments = attachments.data();
 	framebufferInfo.width = textures.back()->getWidth();
 	framebufferInfo.height = textures.back()->getHeight();

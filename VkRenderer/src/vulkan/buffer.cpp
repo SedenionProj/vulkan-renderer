@@ -30,7 +30,7 @@ void Buffer::createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPrope
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
+	allocInfo.memoryTypeIndex = m_device->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
 
 	if (vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate buffer memory!");
@@ -60,18 +60,7 @@ void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize siz
 	vkQueueWaitIdle(m_device->m_graphicsQueue); // temp
 }
 
-uint32_t Buffer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
-	VkPhysicalDeviceMemoryProperties memProperties;
-	vkGetPhysicalDeviceMemoryProperties(m_device->getPhysicalDevice().getHandle(), &memProperties);
 
-	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-			return i;
-		}
-	}
-
-	throw std::runtime_error("failed to find suitable memory type!");
-}
 
 // vertex buffer
 VertexBuffer::VertexBuffer(std::shared_ptr<Device> device, uint32_t size, const void* vData)

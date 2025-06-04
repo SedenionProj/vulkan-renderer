@@ -12,7 +12,6 @@ class Renderer {
 
 public:
 	void run() {
-		m_window = std::make_shared<Window>();
 		initVulkan();
 		mainLoop();
 		cleanup();
@@ -21,17 +20,22 @@ public:
 private:
 
 	void initVulkan() {
+		m_window = std::make_shared<Window>();
 		m_context = std::make_shared<Context>();
 		m_device = std::make_shared<Device>(m_context);
 		m_swapchain = std::make_shared<Swapchain>(m_context, m_window, m_device);
-		m_renderPass = std::make_shared<RenderPass>();
+		m_renderPass = std::make_shared<RenderPass>(m_device);
+		createDepthResources();
 		m_texture = std::make_shared<Texture2D>(m_device, "D:/youtube/#PACK/yt/banner.png");
 		m_shader = std::make_shared<Shader>();
 		m_pipeline = std::make_shared<Pipeline>(m_shader, m_swapchain, m_renderPass);
+		m_depthTexture = std::make_shared<Texture2D>(m_device, 1280, 720);
+		m_depthTexture->createImage(m_device->getPhysicalDevice().findDepthFormat(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		m_depthTexture->createImageView(m_device->getPhysicalDevice().findDepthFormat(), VK_IMAGE_ASPECT_DEPTH_BIT);
 		for (int i = 0; i < m_swapchain->getSwapchainTexturesCount(); i++) {
-
 			std::vector<std::shared_ptr<Texture2D>> textures = {
-				m_swapchain->m_swapchainTextures[i]
+				m_swapchain->m_swapchainTextures[i],
+				m_depthTexture
 			};
 
 			m_swapChainFramebuffers.emplace_back(std::make_shared<Framebuffer>(
@@ -203,6 +207,13 @@ private:
 		}
 	}
 
+	void createDepthResources() {
+		VkFormat depthFormat = m_device->getPhysicalDevice().findDepthFormat();
+	}
+
+	bool hasStencilComponent(VkFormat format) {
+		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+	}
 private:
 	
 	struct UniformBufferObject {
@@ -213,14 +224,20 @@ private:
 
 
 	const std::vector<Vertex> vertices = {
-		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+		{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+		{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+		{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+		{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+		{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+		{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+		{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 	};
 
 	const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0
+		0, 1, 2, 2, 3, 0,
+		4, 5, 6, 6, 7, 4
 	};
 
 private:		
@@ -236,6 +253,7 @@ private:
 	std::shared_ptr<IndexBuffer> m_indexBuffer;
 	std::vector<UniformBuffer> m_uniformBuffers;
 	std::shared_ptr<Texture2D> m_texture;
+	std::shared_ptr<Texture2D> m_depthTexture;
 
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;

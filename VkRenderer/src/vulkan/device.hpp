@@ -22,6 +22,9 @@ public:
 	VkPhysicalDevice getHandle() { return m_physicalDevice; }
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+	VkFormat findDepthFormat();
+	VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
 private:
 	void pickPhysicalDevice();

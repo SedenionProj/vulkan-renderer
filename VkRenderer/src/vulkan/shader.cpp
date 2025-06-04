@@ -43,7 +43,7 @@ Shader::Shader() {
 	m_attributeDescriptions.resize(3);
 	m_attributeDescriptions[0].binding = 0;
 	m_attributeDescriptions[0].location = 0;
-	m_attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+	m_attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
 	m_attributeDescriptions[0].offset = offsetof(Vertex, Vertex::pos);
 
 	m_attributeDescriptions[1].binding = 0;

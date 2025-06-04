@@ -119,7 +119,7 @@ void Swapchain::createSwapchain() {
 	m_swapchainTexturesCount = swapchainImages.size();
 
 	for (size_t i = 0; i < m_swapchainTexturesCount; i++) {
-		VkImageView imageView;
+		VkImageView imageView; // todo: use helper function
 
 		VkImageViewCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
