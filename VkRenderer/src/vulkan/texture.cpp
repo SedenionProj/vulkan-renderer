@@ -10,8 +10,7 @@ Texture2D::Texture2D(VkImage image, VkImageView imageView, uint32_t width, uint3
 
 }
 
-Texture2D::Texture2D(std::shared_ptr<Device> device, std::filesystem::path path)
-	: m_device(device) {
+Texture2D::Texture2D(std::filesystem::path path) {
 	// load texture
 	int width, height, texChannels;
 	stbi_uc* pixels = stbi_load(path.string().c_str(), &width, &height, &texChannels, STBI_rgb_alpha);
@@ -25,7 +24,7 @@ Texture2D::Texture2D(std::shared_ptr<Device> device, std::filesystem::path path)
 		throw std::runtime_error("failed to load texture image!");
 	}
 
-	Buffer stagingBuffer(device);
+	Buffer stagingBuffer;
 	stagingBuffer.createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 	void* data;
@@ -52,8 +51,8 @@ Texture2D::Texture2D(std::shared_ptr<Device> device, std::filesystem::path path)
 	createSampler();
 }
 
-Texture2D::Texture2D(std::shared_ptr<Device> device, uint32_t width, uint32_t height)
-	 : m_device(device), m_width(width), m_height(height) {}
+Texture2D::Texture2D(uint32_t width, uint32_t height)
+	 : m_width(width), m_height(height) {}
 
 Texture2D::~Texture2D()
 {
@@ -106,7 +105,7 @@ void Texture2D::createImage(VkFormat format, VkImageTiling tiling, VkImageUsageF
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = m_device->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
+	allocInfo.memoryTypeIndex = Device::get()->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
 
 	if (vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate image memory!");
@@ -117,7 +116,7 @@ void Texture2D::createImage(VkFormat format, VkImageTiling tiling, VkImageUsageF
 
 void Texture2D::createSampler() {
 	VkPhysicalDeviceProperties properties{}; // todo : move inside physical device
-	vkGetPhysicalDeviceProperties(m_device->getPhysicalDevice().getHandle(), &properties);
+	vkGetPhysicalDeviceProperties(Device::get()->getPhysicalDevice().getHandle(), &properties);
 
 	VkSamplerCreateInfo samplerInfo{};
 	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -143,7 +142,7 @@ void Texture2D::createSampler() {
 }
 
 void Texture2D::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
-	CommandPool commandPool(m_device);
+	CommandPool commandPool;
 	CommandBuffer commandBuffer(commandPool.getHandle());
 	commandBuffer.beginRecording();
 
@@ -190,12 +189,12 @@ void Texture2D::transitionImageLayout(VkImage image, VkFormat format, VkImageLay
 	);
 
 	commandBuffer.endRecording();
-	commandBuffer.submit(m_device, false);
-	vkQueueWaitIdle(m_device->m_graphicsQueue); // temp
+	commandBuffer.submit(false);
+	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
 }
 
 void Texture2D::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height) {
-	CommandPool commandPool(m_device);
+	CommandPool commandPool;
 	CommandBuffer commandBuffer(commandPool.getHandle());
 	commandBuffer.beginRecording();
 
@@ -226,6 +225,6 @@ void Texture2D::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width
 	);
 
 	commandBuffer.endRecording();
-	commandBuffer.submit(m_device, false);
-	vkQueueWaitIdle(m_device->m_graphicsQueue); // temp
+	commandBuffer.submit(false);
+	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
 }

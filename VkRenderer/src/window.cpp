@@ -1,4 +1,6 @@
-#include "src/vulkan/window.hpp"
+#include "src/window.hpp"
+#include "src/vulkan/context.hpp"
+#include "src/vulkan/swapchain.hpp"
 
 Window::Window()
 {
@@ -24,6 +26,9 @@ Window::Window()
 		app->height = h;
 		app->resized = true;
 		});
+
+	Context::create();
+	m_swapchain = std::make_shared<Swapchain>(*this);
 }
 
 Window::~Window()

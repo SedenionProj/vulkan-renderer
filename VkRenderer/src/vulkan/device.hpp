@@ -1,6 +1,7 @@
 #pragma once
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include "src/vulkan/context.hpp"
 
 struct QueueFamilyIndices {
 	std::optional<uint32_t> graphicsFamily;
@@ -16,7 +17,7 @@ class Context;
 class PhysicalDevice{
 
 public:
-	PhysicalDevice(std::shared_ptr<Context> ctx);
+	PhysicalDevice();
 	~PhysicalDevice();
 
 	VkPhysicalDevice getHandle() { return m_physicalDevice; }
@@ -46,17 +47,21 @@ private:
 
 class Device {
 public:
-	Device(std::shared_ptr<Context> ctx);
+	Device();
 	~Device();
 
-	static VkDevice getHandle() { return m_handle; }
+	static std::shared_ptr<Device> get() { return Context::get()->getDevice(); }
+	static VkDevice getHandle() { return Context::get()->getDevice()->m_handle; }
 
+	VkDevice getDevice() { return m_handle; }
+	VkQueue getGraphicsQueue() { return m_presentQueue; }
+	VkQueue getPresentQueue() { return m_graphicsQueue; }
 	PhysicalDevice& getPhysicalDevice() { return m_physicalDevice; }
 
-public:
+private:
 	void createDevice();
 
-	static VkDevice m_handle;
+	VkDevice m_handle;
 	VkQueue m_graphicsQueue;
 	VkQueue m_presentQueue;
 

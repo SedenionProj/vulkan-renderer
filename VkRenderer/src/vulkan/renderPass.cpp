@@ -1,8 +1,7 @@
 #include "src/vulkan/renderPass.hpp"
 #include "src/vulkan/device.hpp"
 
-RenderPass::RenderPass(std::shared_ptr<Device> device) 
-	:m_device(device) {
+RenderPass::RenderPass() {
 	createRenderPass();
 }
 
@@ -23,7 +22,7 @@ void RenderPass::createRenderPass() {
 	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 	VkAttachmentDescription depthAttachment{};
-	depthAttachment.format = m_device->getPhysicalDevice().findDepthFormat();
+	depthAttachment.format = Device::get()->getPhysicalDevice().findDepthFormat();
 	depthAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 	depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;

@@ -4,7 +4,7 @@
 
 class RenderPass {
 public:
-	RenderPass(std::shared_ptr<Device> device);
+	RenderPass();
 	~RenderPass();
 
 	VkRenderPass getHandle() { return m_handle; }
@@ -14,5 +14,4 @@ private:
 
 private:
 	VkRenderPass m_handle;
-	std::shared_ptr<Device> m_device;
 };

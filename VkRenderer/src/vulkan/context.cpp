@@ -1,6 +1,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include "src/vulkan/context.hpp"
+#include "src/vulkan/device.hpp"
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
 	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
@@ -22,6 +23,8 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 Context::Context() {
 	createInstance();
 	setupDebugMessenger();
+
+	
 }
 
 Context::~Context() {
@@ -29,6 +32,16 @@ Context::~Context() {
 		DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
 	}
 	vkDestroyInstance(m_instance, nullptr);
+}
+
+Context* Context::s_context = nullptr;
+
+void Context::create()
+{
+	if (s_context == nullptr) {
+		s_context = new Context();
+		s_context->m_device = std::make_shared<Device>();
+	}
 }
 
 void Context::createInstance() {

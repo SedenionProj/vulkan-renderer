@@ -1,17 +1,15 @@
 #pragma once
 
-#include "src/vulkan/device.hpp"
-#include "src/vulkan/framebuffer.hpp"
-#include "src/vulkan/renderPass.hpp"
 #include "src/vulkan/pipeline.hpp"
 #include "src/vulkan/syncObjects.hpp"
 
 class Semaphore;
-class Device;
+class Framebuffer;
+class renderPass;
 
 class CommandPool {
 public:
-	CommandPool(std::shared_ptr<Device> device);
+	CommandPool();
 	~CommandPool();
 
 	VkCommandPool getHandle() { return m_handle; }
@@ -34,7 +32,7 @@ public:
 	void updateViewport(uint32_t width, uint32_t height);
 
 	void reset();
-	void submit(std::shared_ptr<Device> device, bool semaphores = true);
+	void submit(bool semaphores = true);
 
 	std::shared_ptr<Fence> getFence() { return m_fence; }
 
@@ -45,7 +43,6 @@ public:
 	VkCommandPool m_commandPool;
 
 	std::shared_ptr<RenderPass> m_renderPass;
-
 	std::shared_ptr<Semaphore> m_imageAvailableSemaphores;
 	std::shared_ptr<Semaphore> m_renderFinishedSemaphores;
 	std::shared_ptr<Fence> m_fence;

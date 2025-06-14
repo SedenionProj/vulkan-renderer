@@ -8,8 +8,8 @@ class Device;
 class Texture2D {
 public:
 	Texture2D(VkImage image, VkImageView imageView, uint32_t width, uint32_t height);
-	Texture2D(std::shared_ptr<Device> device, std::filesystem::path path);
-	Texture2D(std::shared_ptr<Device> device, uint32_t width, uint32_t height);
+	Texture2D(std::filesystem::path path);
+	Texture2D(uint32_t width, uint32_t height);
 	~Texture2D();
 
 	VkImageView getImageView() { return m_imageView; }
@@ -32,6 +32,4 @@ private:
 
 	uint32_t m_width;
 	uint32_t m_height;
-
-	std::shared_ptr<Device> m_device = nullptr;
 };

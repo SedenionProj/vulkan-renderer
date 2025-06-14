@@ -1,8 +1,7 @@
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/context.hpp"
 
-PhysicalDevice::PhysicalDevice(std::shared_ptr<Context> ctx)
-	: m_ctx(ctx) {
+PhysicalDevice::PhysicalDevice() {
 	pickPhysicalDevice();
 }
 
@@ -10,16 +9,14 @@ PhysicalDevice::~PhysicalDevice() {
 
 }
 
-VkDevice Device::m_handle = VK_NULL_HANDLE;
-
 void PhysicalDevice::pickPhysicalDevice() {
 	uint32_t deviceCount = 0;
-	vkEnumeratePhysicalDevices(m_ctx->getInstance(), &deviceCount, nullptr);
+	vkEnumeratePhysicalDevices(Context::get()->getInstance(), &deviceCount, nullptr);
 	if (deviceCount == 0) {
 		throw std::runtime_error("failed to find GPUs with Vulkan support");
 	}
 	std::vector<VkPhysicalDevice> devices(deviceCount);
-	vkEnumeratePhysicalDevices(m_ctx->getInstance(), &deviceCount, devices.data());
+	vkEnumeratePhysicalDevices(Context::get()->getInstance(), &deviceCount, devices.data());
 
 	for (const auto& device : devices) {
 		if (isDeviceSuitable(device)) {
@@ -128,8 +125,7 @@ VkFormat PhysicalDevice::findSupportedFormat(const std::vector<VkFormat>& candid
 
 // device implementation
 
-Device::Device(std::shared_ptr<Context> ctx)
-	: m_physicalDevice(ctx) {
+Device::Device() {
 	createDevice();
 }
 

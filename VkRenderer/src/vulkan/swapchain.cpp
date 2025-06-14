@@ -1,18 +1,17 @@
+#include "src/window.hpp"
 #include "src/vulkan/swapchain.hpp"
 #include "src/vulkan/texture.hpp"
-#include "src/vulkan/window.hpp"
-#include "src/vulkan/context.hpp"
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/commandBuffer.hpp"
 
-Swapchain::Swapchain(std::shared_ptr<Context> ctx, std::shared_ptr<Window> window, std::shared_ptr<Device> device)
-	: m_ctx(ctx), m_window(window), m_device(device) {
-	if (glfwCreateWindowSurface(ctx->getInstance(), window->getHandle(), nullptr, &m_surface) != VK_SUCCESS) {
+Swapchain::Swapchain(Window& window)
+	:  m_window(window) {
+	if (glfwCreateWindowSurface(Context::get()->getInstance(), window.getHandle(), nullptr, &m_surface) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create window surface");
 	}
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
-		m_frameData[i].commandPool = std::make_shared<CommandPool>(device);
+		m_frameData[i].commandPool = std::make_shared<CommandPool>();
 		m_frameData[i].commandBuffer = std::make_shared<CommandBuffer>(m_frameData[i].commandPool->getHandle());
 	}
 	//VkBool32 presentSupport = false;
@@ -22,9 +21,9 @@ Swapchain::Swapchain(std::shared_ptr<Context> ctx, std::shared_ptr<Window> windo
 
 Swapchain::~Swapchain()
 {
-	vkDestroySwapchainKHR(m_device->getHandle(), m_swapchain, nullptr);
+	vkDestroySwapchainKHR(Device::getHandle(), m_swapchain, nullptr);
 
-	vkDestroySurfaceKHR(m_ctx->getInstance(), m_surface, nullptr);
+	vkDestroySurfaceKHR(Context::get()->getInstance(), m_surface, nullptr);
 }
 
 void Swapchain::present()
@@ -48,7 +47,7 @@ void Swapchain::present()
 	presentInfo.pSwapchains = &m_swapchain;
 	presentInfo.pImageIndices = &m_currentImageIndex;
 
-	VkResult result = vkQueuePresentKHR(m_device->m_presentQueue, &presentInfo);
+	VkResult result = vkQueuePresentKHR(Device::get()->getPresentQueue(), &presentInfo);
 
 	m_currentFrameIndex = (m_currentFrameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
 
@@ -56,12 +55,12 @@ void Swapchain::present()
 
 void Swapchain::acquireNexImage()
 {
-	vkAcquireNextImageKHR(m_device->getHandle(), m_swapchain, UINT64_MAX,getCurrentCommandBuffer()->m_imageAvailableSemaphores->getHandle(), VK_NULL_HANDLE, &m_currentImageIndex);
+	vkAcquireNextImageKHR(Device::getHandle(), m_swapchain, UINT64_MAX,getCurrentCommandBuffer()->m_imageAvailableSemaphores->getHandle(), VK_NULL_HANDLE, &m_currentImageIndex);
 
 }
 
 void Swapchain::createSwapchain() {
-	PhysicalDevice& fd = m_device->getPhysicalDevice();
+	PhysicalDevice& fd = Device::get()->getPhysicalDevice();
 
 	SwapchainSupportDetails swapchainSupport = querySwapchainSupport(fd.getHandle());
 
@@ -102,14 +101,14 @@ void Swapchain::createSwapchain() {
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-	if (vkCreateSwapchainKHR(m_device->getHandle(), &createInfo, nullptr, &m_swapchain) != VK_SUCCESS) {
+	if (vkCreateSwapchainKHR(Device::getHandle(), &createInfo, nullptr, &m_swapchain) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create swap chain");
 	}
 
 	std::vector<VkImage> swapchainImages;
-	vkGetSwapchainImagesKHR(m_device->getHandle(), m_swapchain, &imageCount, nullptr);
+	vkGetSwapchainImagesKHR(Device::getHandle(), m_swapchain, &imageCount, nullptr);
 	swapchainImages.resize(imageCount);
-	vkGetSwapchainImagesKHR(m_device->getHandle(), m_swapchain, &imageCount, swapchainImages.data());
+	vkGetSwapchainImagesKHR(Device::getHandle(), m_swapchain, &imageCount, swapchainImages.data());
 
 	m_swapchainImageFormat = surfaceFormat.format;
 	m_swapchainExtent = extent;
@@ -136,7 +135,7 @@ void Swapchain::createSwapchain() {
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
-		if (vkCreateImageView(m_device->getHandle(), &createInfo, nullptr, &imageView) != VK_SUCCESS) {
+		if (vkCreateImageView(Device::getHandle(), &createInfo, nullptr, &imageView) != VK_SUCCESS) {
 			throw std::runtime_error("failed to create image views!");
 		}
 
@@ -194,8 +193,8 @@ VkExtent2D Swapchain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilit
 	} else {
 
 		VkExtent2D actualExtent = {
-			m_window->m_data.width,
-			m_window->m_data.height
+			m_window.m_data.width,
+			m_window.m_data.height
 		};
 
 		actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);

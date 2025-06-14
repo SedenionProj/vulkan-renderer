@@ -1,12 +1,18 @@
-#include "src/vulkan/window.hpp"
-#include "src/vulkan/context.hpp"
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/swapchain.hpp"
 #include "src/vulkan/renderPass.hpp"
 #include "src/vulkan/pipeline.hpp"
 #include "src/vulkan/framebuffer.hpp"
 #include "src/vulkan/commandBuffer.hpp"
-#include "src/vulkan/buffer.hpp"
+#include "src/model.hpp"
+#include "src/window.hpp"
+
+
+const std::string MODEL_PATH = "assets/models/viking_room/viking_room.obj";
+const std::string TEXTURE_PATH = "assets/models/viking_room/viking_room.png";
+
+const std::string MODEL_PATH_S = "assets/models/sponza/sponza.obj";
+const std::string TEXTURE_PATH_S = "assets/models/sponza/textures/spnza_bricks_a_bump.png";
 
 class Renderer {
 
@@ -21,20 +27,17 @@ private:
 
 	void initVulkan() {
 		m_window = std::make_shared<Window>();
-		m_context = std::make_shared<Context>();
-		m_device = std::make_shared<Device>(m_context);
-		m_swapchain = std::make_shared<Swapchain>(m_context, m_window, m_device);
-		m_renderPass = std::make_shared<RenderPass>(m_device);
-		createDepthResources();
-		m_texture = std::make_shared<Texture2D>(m_device, "D:/youtube/#PACK/yt/banner.png");
+
+		
+		m_renderPass = std::make_shared<RenderPass>();
 		m_shader = std::make_shared<Shader>();
-		m_pipeline = std::make_shared<Pipeline>(m_shader, m_swapchain, m_renderPass);
-		m_depthTexture = std::make_shared<Texture2D>(m_device, 1280, 720);
-		m_depthTexture->createImage(m_device->getPhysicalDevice().findDepthFormat(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		m_depthTexture->createImageView(m_device->getPhysicalDevice().findDepthFormat(), VK_IMAGE_ASPECT_DEPTH_BIT);
-		for (int i = 0; i < m_swapchain->getSwapchainTexturesCount(); i++) {
+		m_pipeline = std::make_shared<Pipeline>(m_shader, m_window->getSwapchain(), m_renderPass);
+		m_depthTexture = std::make_shared<Texture2D>(1280, 720);
+		m_depthTexture->createImage(Device::get()->getPhysicalDevice().findDepthFormat(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		m_depthTexture->createImageView(Device::get()->getPhysicalDevice().findDepthFormat(), VK_IMAGE_ASPECT_DEPTH_BIT);
+		for (int i = 0; i < m_window->getSwapchain()->getSwapchainTexturesCount(); i++) {
 			std::vector<std::shared_ptr<Texture2D>> textures = {
-				m_swapchain->m_swapchainTextures[i],
+				m_window->getSwapchain()->m_swapchainTextures[i],
 				m_depthTexture
 			};
 
@@ -43,19 +46,23 @@ private:
 				m_renderPass
 			));
 		}
-		m_vertexBuffer = std::make_shared<VertexBuffer>(m_device, sizeof(vertices[0]) * vertices.size(), vertices.data());
-		m_indexBuffer = std::make_shared<IndexBuffer>(m_device, sizeof(indices[0]) * indices.size(), indices.data());
+
+		m_texture = std::make_shared<Texture2D>(TEXTURE_PATH);
+
+		m_model = std::make_shared<Model>(MODEL_PATH_S.c_str());
+		
 
 		m_uniformBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
 
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			m_uniformBuffers.emplace_back(m_device, (uint32_t)sizeof(UniformBufferObject));
+			m_uniformBuffers.emplace_back((uint32_t)sizeof(UniformBufferObject));
 		}
 		
 		createDescriptorPool();
 		createDescriptorSets();
 	}
-
+	
+	
 	void recordCommandBuffer(std::shared_ptr<CommandBuffer> commandBuffer, uint32_t imageIndex) {
 		commandBuffer->beginRecording();
 		commandBuffer->beginRenderpass(m_renderPass, m_swapChainFramebuffers[imageIndex], 1280, 720);
@@ -63,38 +70,68 @@ private:
 
 		commandBuffer->updateViewport(1280, 720);
 
-		VkBuffer vertexBuffers[] = { m_vertexBuffer->getHandle() };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(commandBuffer->getHandle(), m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT16);
+		for(auto mesh : m_model->m_meshes){
+			VkBuffer vertexBuffers[] = {mesh->m_vertexBuffer->getHandle() };
+			VkDeviceSize offsets[] = { 0 };
+			vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
+			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
 
-		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_shader->getPipelineLayout(), 0, 1, &descriptorSets[m_swapchain->getCurrentFrameIndex()], 0, nullptr);
+			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_shader->getPipelineLayout(), 0, 1, &descriptorSets[m_window->getSwapchain()->getCurrentFrameIndex()], 0, nullptr);
 
-		vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+		}
+		
 
 		commandBuffer->endRenderPass();
 		commandBuffer->endRecording();
 	}
-
+	
 	void updateUniformBuffer(uint32_t currentImage) {
 		static auto startTime = std::chrono::high_resolution_clock::now();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		
+		static float yaw = 0.0f; 
+		static float pitch = 0.0f; 
+		static float zoom = -5.0f;  
+
+		double xpos, ypos;
+		glfwGetCursorPos(m_window->getHandle(), &xpos, &ypos);
+
+		int width, height;
+		glfwGetWindowSize(m_window->getHandle(), &width, &height);
+
+		float normX = ((float)xpos / width - 0.5f) * 2.0f;
+		float normY = ((float)ypos / height - 0.5f) * 2.0f;
+
+		yaw = -normX * glm::radians(180.0f); 
+		pitch = normY * glm::radians(90.0f);  
+
+		pitch = std::clamp(pitch, -glm::half_pi<float>() + 0.01f, glm::half_pi<float>() - 0.01f);
+
+		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_Z) == GLFW_PRESS) zoom -= 1.f;
+		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_S) == GLFW_PRESS) zoom += 1.f;
+
+		glm::vec3 cameraPos;
+		cameraPos.x = zoom * cos(pitch) * sin(yaw);
+		cameraPos.y = zoom * sin(pitch);
+		cameraPos.z = zoom * cos(pitch) * cos(yaw);
 
 		UniformBufferObject ubo{};
-		ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.proj = glm::perspective(glm::radians(45.0f), 1280 / (float)720, 0.1f, 10.0f);
+		ubo.model = glm::mat4(1.0f);
+		ubo.view = glm::lookAt(cameraPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ubo.proj = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.1f, 5000.0f);
 		ubo.proj[1][1] *= -1;
 		m_uniformBuffers[currentImage].setData(&ubo, sizeof(ubo));
 
 	}
 
 	void drawFrame() {
-		m_swapchain->getCurrentCommandBuffer()->getFence()->wait();
+		auto swapchain = m_window->getSwapchain();
+		swapchain->getCurrentCommandBuffer()->getFence()->wait();
 
-		m_swapchain->acquireNexImage();
+		swapchain->acquireNexImage();
 
 		/*
 		if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -106,14 +143,14 @@ private:
 		*/
 
 
-		m_swapchain->getCurrentCommandBuffer()->reset();
-		recordCommandBuffer(m_swapchain->getCurrentCommandBuffer(), m_swapchain->getCurrentImageIndex());
+		swapchain->getCurrentCommandBuffer()->reset();
+		recordCommandBuffer(swapchain->getCurrentCommandBuffer(), swapchain->getCurrentImageIndex());
 
-		updateUniformBuffer(m_swapchain->getCurrentFrameIndex());
+		updateUniformBuffer(swapchain->getCurrentFrameIndex());
 
-		m_swapchain->getCurrentCommandBuffer()->submit(m_device); // temp
+		swapchain->getCurrentCommandBuffer()->submit(); // temp
 
-		m_swapchain->present();
+		swapchain->present();
 
 		/*
 		if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_window->m_data.resized) {
@@ -132,10 +169,12 @@ private:
 	void mainLoop() {
 		while (!glfwWindowShouldClose(m_window->getHandle())) {
 			glfwPollEvents();
+
+			
 			drawFrame();
 		}
 
-		vkDeviceWaitIdle(m_device->getHandle());
+		vkDeviceWaitIdle(Device::getHandle());
 
 	}
 
@@ -207,10 +246,6 @@ private:
 		}
 	}
 
-	void createDepthResources() {
-		VkFormat depthFormat = m_device->getPhysicalDevice().findDepthFormat();
-	}
-
 	bool hasStencilComponent(VkFormat format) {
 		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 	}
@@ -220,37 +255,16 @@ private:
 		glm::mat4 model;
 		glm::mat4 view;
 		glm::mat4 proj;
-	};
-
-
-	const std::vector<Vertex> vertices = {
-		{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-		{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-		{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-		{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-		{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-		{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-		{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-		{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-	};
-
-	const std::vector<uint16_t> indices = {
-		0, 1, 2, 2, 3, 0,
-		4, 5, 6, 6, 7, 4
-	};
+	};	
 
 private:		
 	std::shared_ptr<Window> m_window;
-	std::shared_ptr<Context> m_context;
-	std::shared_ptr<Device> m_device;
-	std::shared_ptr<Swapchain> m_swapchain;
+	std::shared_ptr<Model> m_model;
 	std::shared_ptr<RenderPass> m_renderPass;
 	std::shared_ptr<Pipeline> m_pipeline;
 	std::shared_ptr<Shader> m_shader;
 	std::vector<std::shared_ptr<Framebuffer>> m_swapChainFramebuffers;
-	std::shared_ptr<VertexBuffer> m_vertexBuffer;
-	std::shared_ptr<IndexBuffer> m_indexBuffer;
+
 	std::vector<UniformBuffer> m_uniformBuffers;
 	std::shared_ptr<Texture2D> m_texture;
 	std::shared_ptr<Texture2D> m_depthTexture;

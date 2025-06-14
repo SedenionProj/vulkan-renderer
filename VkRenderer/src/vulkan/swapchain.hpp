@@ -25,7 +25,7 @@ class Swapchain {
 	};
 
 public:
-	Swapchain(std::shared_ptr<Context> ctx, std::shared_ptr<Window> window, std::shared_ptr<Device> device);
+	Swapchain(Window& window);
 	~Swapchain();
 
 	void present();
@@ -56,7 +56,5 @@ public:
 	std::vector<std::shared_ptr<Texture2D>> m_swapchainTextures;
 	FrameData m_frameData[MAX_FRAMES_IN_FLIGHT];
 
-	std::shared_ptr<Context> m_ctx;
-	std::shared_ptr<Window> m_window;
-	std::shared_ptr<Device> m_device;
+	Window& m_window;
 };

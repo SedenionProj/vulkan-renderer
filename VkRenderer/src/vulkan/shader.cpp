@@ -1,3 +1,4 @@
+#include <spirv_cross.hpp>
 #include "src/vulkan/shader.hpp"
 #include "src/vulkan/device.hpp"
 
@@ -16,6 +17,60 @@ static std::vector<char> readFile(const std::string& filename) {
 
 	return buffer;
 }
+
+VkFormat spirvTypeToVkFormat(const spirv_cross::SPIRType& type) {
+	using namespace spirv_cross;
+
+	if (type.basetype == SPIRType::Float) {
+		switch (type.columns) {
+		case 1:
+			switch (type.vecsize) {
+			case 1: return VK_FORMAT_R32_SFLOAT;
+			case 2: return VK_FORMAT_R32G32_SFLOAT;
+			case 3: return VK_FORMAT_R32G32B32_SFLOAT;
+			case 4: return VK_FORMAT_R32G32B32A32_SFLOAT;
+			}
+			break;
+		}
+	}
+	else if (type.basetype == SPIRType::Int) {
+		switch (type.vecsize) {
+		case 1: return VK_FORMAT_R32_SINT;
+		case 2: return VK_FORMAT_R32G32_SINT;
+		case 3: return VK_FORMAT_R32G32B32_SINT;
+		case 4: return VK_FORMAT_R32G32B32A32_SINT;
+		}
+	}
+	else if (type.basetype == SPIRType::UInt) {
+		switch (type.vecsize) {
+		case 1: return VK_FORMAT_R32_UINT;
+		case 2: return VK_FORMAT_R32G32_UINT;
+		case 3: return VK_FORMAT_R32G32B32_UINT;
+		case 4: return VK_FORMAT_R32G32B32A32_UINT;
+		}
+	}
+
+	throw std::runtime_error("Unsupported vertex attribute format");
+}
+
+uint32_t formatSize(VkFormat format) {
+	switch (format) {
+	case VK_FORMAT_R32_SFLOAT: return 4;
+	case VK_FORMAT_R32G32_SFLOAT: return 8;
+	case VK_FORMAT_R32G32B32_SFLOAT: return 12;
+	case VK_FORMAT_R32G32B32A32_SFLOAT: return 16;
+	case VK_FORMAT_R32_SINT: return 4;
+	case VK_FORMAT_R32G32_SINT: return 8;
+	case VK_FORMAT_R32G32B32_SINT: return 12;
+	case VK_FORMAT_R32G32B32A32_SINT: return 16;
+	case VK_FORMAT_R32_UINT: return 4;
+	case VK_FORMAT_R32G32_UINT: return 8;
+	case VK_FORMAT_R32G32B32_UINT: return 12;
+	case VK_FORMAT_R32G32B32A32_UINT: return 16;
+	default: throw std::runtime_error("Unhandled VkFormat in format_size");
+	}
+}
+
 
 Shader::Shader() {
 	auto vertShaderCode = readFile("assets/vert.spv");
@@ -39,25 +94,25 @@ Shader::Shader() {
 	m_shaderStages[0] = vertShaderStageInfo;
 	m_shaderStages[1] = fragShaderStageInfo;
 
-	// temp
-	m_attributeDescriptions.resize(3);
-	m_attributeDescriptions[0].binding = 0;
-	m_attributeDescriptions[0].location = 0;
-	m_attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-	m_attributeDescriptions[0].offset = offsetof(Vertex, Vertex::pos);
+	spirv_cross::Compiler comp(reinterpret_cast<uint32_t*>(vertShaderCode.data()), vertShaderCode.size()/4);
+	spirv_cross::ShaderResources resources = comp.get_shader_resources();
 
-	m_attributeDescriptions[1].binding = 0;
-	m_attributeDescriptions[1].location = 1;
-	m_attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-	m_attributeDescriptions[1].offset = offsetof(Vertex, Vertex::color);
+	uint32_t currOffset = 0;
+	m_attributeDescriptions.reserve(resources.stage_inputs.size());
+	for (auto& resource : resources.stage_inputs) {
+		const spirv_cross::SPIRType& type = comp.get_type(resource.type_id);
+	
+		VkVertexInputAttributeDescription desc{};
+		desc.binding = comp.get_decoration(resource.id, spv::DecorationBinding);
+		desc.location = comp.get_decoration(resource.id, spv::DecorationLocation);
+		desc.format = spirvTypeToVkFormat(type);
+		desc.offset = currOffset;
+		currOffset += formatSize(desc.format);
+		m_attributeDescriptions.emplace_back(desc);
+	}
 
-	m_attributeDescriptions[2].binding = 0;
-	m_attributeDescriptions[2].location = 2;
-	m_attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-	m_attributeDescriptions[2].offset = offsetof(Vertex, Vertex::texCoord);
-
-	m_vertexInputStride = sizeof(Vertex);
-
+	m_vertexInputStride = currOffset;
+	
 	createPipelineLayout();
 }
 

@@ -1,10 +1,8 @@
 #include "src/vulkan/buffer.hpp"
-#include "src/vulkan/device.hpp"
 #include "src/vulkan/commandBuffer.hpp"
+#include "src/vulkan/device.hpp"
 
-
-Buffer::Buffer(std::shared_ptr<Device> device)
-	: m_device(device) {
+Buffer::Buffer() {
 }
 
 Buffer::~Buffer() {
@@ -30,7 +28,7 @@ void Buffer::createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPrope
 	VkMemoryAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = m_device->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
+	allocInfo.memoryTypeIndex = Context::get()->getDevice()->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
 
 	if (vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
 		throw std::runtime_error("failed to allocate buffer memory!");
@@ -45,7 +43,7 @@ void Buffer::createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPrope
 }
 
 void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
-	CommandPool commandPool(m_device);
+	CommandPool commandPool;
 	CommandBuffer commandBuffer(commandPool.getHandle());
 	commandBuffer.beginRecording();
 
@@ -55,16 +53,15 @@ void Buffer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize siz
 
 	commandBuffer.endRecording();
 
-	commandBuffer.submit(m_device, false);
+	commandBuffer.submit(false);
 
-	vkQueueWaitIdle(m_device->m_graphicsQueue); // temp
+	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
 }
 
 
 
 // vertex buffer
-VertexBuffer::VertexBuffer(std::shared_ptr<Device> device, uint32_t size, const void* vData)
-	: Buffer(device) {
+VertexBuffer::VertexBuffer(uint32_t size, const void* vData) {
 	VkDeviceSize bufferSize = size;
 
 	VkBuffer stagingBuffer;
@@ -97,8 +94,7 @@ VertexBuffer::VertexBuffer(std::shared_ptr<Device> device, uint32_t size, const 
 }
 
 // index buffer
-IndexBuffer::IndexBuffer(std::shared_ptr<Device> device, uint32_t size, const void* vData)
-	: Buffer(device) {
+IndexBuffer::IndexBuffer(uint32_t size, const void* vData) {
 	VkDeviceSize bufferSize = size;
 
 	VkBuffer stagingBuffer;
@@ -130,8 +126,7 @@ IndexBuffer::IndexBuffer(std::shared_ptr<Device> device, uint32_t size, const vo
 }
 
 // uniform buffer
-UniformBuffer::UniformBuffer(std::shared_ptr<Device> device, uint32_t size)
-	: Buffer(device) {
+UniformBuffer::UniformBuffer( uint32_t size) {
 	VkDeviceSize bufferSize = size;
 
 	createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_handle, m_memory);

@@ -7,3 +7,9 @@
 [submodule "VkRenderer/vendor/stb"]
 	path = VkRenderer/vendor/stb
 	url = https://github.com/nothings/stb
+[submodule "VkRenderer/vendor/tinyobjloader"]
+	path = VkRenderer/vendor/tinyobjloader
+	url = https://github.com/tinyobjloader/tinyobjloader
+[submodule "VkRenderer/vendor/spirv-cross"]
+	path = VkRenderer/vendor/spirv-cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross

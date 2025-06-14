@@ -20,10 +20,13 @@ target_include_directories (VkRenderer PUBLIC
     ${VULKAN_INCLUDE_DIRS}
     ${GLM_INCLUDE}
     ${STB_INCLUDE}
+    ${TINYOBJECTLOADER_INCLUDE}
+    ${SPIRV_CROSS_INCLUDE}
 )
 target_link_libraries(VkRenderer 
     Vulkan::Vulkan
     glfw
+    spirv-cross-cpp
 )
 
 add_custom_command(TARGET VkRenderer POST_BUILD

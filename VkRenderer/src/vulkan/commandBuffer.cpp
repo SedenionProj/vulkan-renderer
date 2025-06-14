@@ -1,8 +1,11 @@
 #include "src/vulkan/commandBuffer.hpp"
 #include "src/vulkan/syncObjects.hpp"
+#include "src/vulkan/device.hpp"
+#include "src/vulkan/framebuffer.hpp"
 
-CommandPool::CommandPool(std::shared_ptr<Device> device) {
-	QueueFamilyIndices queueFamilyIndices = device->getPhysicalDevice().findQueueFamilies(device->getPhysicalDevice().getHandle());
+CommandPool::CommandPool() {
+	auto& pDevice = Device::get()->getPhysicalDevice();
+	QueueFamilyIndices queueFamilyIndices = pDevice.findQueueFamilies(pDevice.getHandle());
 
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -52,7 +55,7 @@ void CommandBuffer::beginRenderpass(std::shared_ptr<RenderPass> renderPass, std:
 {
 	m_renderPass = renderPass;
 	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { {0.0f, 0.0f, 0.0f, 1.0f} };
+	clearValues[0].color = { {0.01f, 0.01f, 0.01f, 1.0f} };
 	clearValues[1].depthStencil = { 1.0f, 0 };
 
 	VkRenderPassBeginInfo renderPassInfo{};
@@ -85,7 +88,7 @@ void CommandBuffer::reset()
 	vkResetCommandBuffer(m_handle, 0);
 }
 
-void CommandBuffer::submit(std::shared_ptr<Device> device, bool semaphores)
+void CommandBuffer::submit(bool semaphores)
 {
 	VkSemaphore waitSemaphore = m_imageAvailableSemaphores->getHandle();
 	VkSemaphore signalSemaphore = m_renderFinishedSemaphores->getHandle();
@@ -108,7 +111,7 @@ void CommandBuffer::submit(std::shared_ptr<Device> device, bool semaphores)
 
 	m_fence->reset();
 
-	if (vkQueueSubmit(device->m_graphicsQueue, 1, &submitInfo, m_fence->getHandle()) != VK_SUCCESS) {
+	if (vkQueueSubmit(Device::get()->getGraphicsQueue(), 1, &submitInfo, m_fence->getHandle()) != VK_SUCCESS) {
 		throw std::runtime_error("failed to submit draw command buffer!");
 	}
 }
