@@ -126,7 +126,8 @@ IndexBuffer::IndexBuffer(uint32_t size, const void* vData) {
 }
 
 // uniform buffer
-UniformBuffer::UniformBuffer( uint32_t size) {
+UniformBuffer::UniformBuffer( uint32_t size)
+	: m_size(size) {
 	VkDeviceSize bufferSize = size;
 
 	createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_handle, m_memory);

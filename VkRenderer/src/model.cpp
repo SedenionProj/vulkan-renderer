@@ -1,5 +1,7 @@
 #include "src/vulkan/texture.hpp"
 #include "src/vulkan/buffer.hpp"
+#include "src/vulkan/descriptorSet.hpp"
+#include "src/vulkan/shader.hpp"
 #include "src/model.hpp"
 #include "src/material.hpp"
 
@@ -37,6 +39,8 @@ Model::Model(std::filesystem::path filePath) {
 	std::unordered_map<std::string, std::shared_ptr<Texture2D>> textureCache;
 	m_meshes.reserve(shapes.size());
 
+	auto shader = std::make_shared<Shader>();
+
 	for (const auto& shape : shapes) {
 
 		std::vector<Vertex> vertices;
@@ -53,10 +57,17 @@ Model::Model(std::filesystem::path filePath) {
 				attrib.vertices[3 * index.vertex_index + 2]
 			};
 
+			vertex.normal = {
+				attrib.normals[3 * index.normal_index + 0],
+				attrib.normals[3 * index.normal_index + 1],
+				attrib.normals[3 * index.normal_index + 2]
+			};
+
 			vertex.texCoord = {
 				attrib.texcoords[2 * index.texcoord_index + 0],
 				1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
 			};
+
 
 			vertex.color = { 1.0f, 1.0f, 1.0f };
 
@@ -65,7 +76,10 @@ Model::Model(std::filesystem::path filePath) {
 			vertices.emplace_back(vertex);
 			indices.emplace_back(indices.size());
 		}
+
 		std::shared_ptr<Material> material = std::make_shared<Material>();
+		material->m_shader = shader;
+		material->m_descriptorSet = std::make_shared<DescriptorSet>(shader, 0);
 
 		if (shape.mesh.material_ids[0] > 0) {
 			const tinyobj::material_t* mp = &materials[shape.mesh.material_ids[0]];
@@ -77,11 +91,71 @@ Model::Model(std::filesystem::path filePath) {
 				auto it = textureCache.find(texPathStr);
 				if (it != textureCache.end()) {
 					material->m_albedo = it->second;
+					material->m_descriptorSet->setTexture(material->m_albedo, 1);
 				}
 				else {
 					auto tex = std::make_shared<Texture2D>(texPath);
 					material->m_albedo = tex;
 					textureCache[texPathStr] = tex;
+
+					material->m_descriptorSet->setTexture(material->m_albedo, 1);
+					printf("loaded %s\n", mp->diffuse_texname.c_str());
+				}
+			}
+
+			if (!mp->specular_texname.empty()) {
+				auto texPath = filePath.parent_path() / mp->specular_texname;
+
+				std::string texPathStr = texPath.string();
+				auto it = textureCache.find(texPathStr);
+				if (it != textureCache.end()) {
+					material->m_specular = it->second;
+					material->m_descriptorSet->setTexture(material->m_specular, 2);
+				}
+				else {
+					auto tex = std::make_shared<Texture2D>(texPath);
+					material->m_specular = tex;
+					textureCache[texPathStr] = tex;
+
+					material->m_descriptorSet->setTexture(material->m_specular, 2);
+					printf("loaded %s\n", mp->diffuse_texname.c_str());
+				}
+			}
+
+			if (!mp->normal_texname.empty()) {
+				auto texPath = filePath.parent_path() / mp->normal_texname;
+
+				std::string texPathStr = texPath.string();
+				auto it = textureCache.find(texPathStr);
+				if (it != textureCache.end()) {
+					material->m_normal = it->second;
+					material->m_descriptorSet->setTexture(material->m_normal, 3);
+				}
+				else {
+					auto tex = std::make_shared<Texture2D>(texPath);
+					material->m_normal = tex;
+					textureCache[texPathStr] = tex;
+
+					material->m_descriptorSet->setTexture(material->m_normal, 3);
+					printf("loaded %s\n", mp->diffuse_texname.c_str());
+				}
+			}
+
+			if (!mp->bump_texname.empty()) {
+				auto texPath = filePath.parent_path() / mp->bump_texname;
+
+				std::string texPathStr = texPath.string();
+				auto it = textureCache.find(texPathStr);
+				if (it != textureCache.end()) {
+					material->m_normal = it->second;
+					material->m_descriptorSet->setTexture(material->m_normal, 3);
+				}
+				else {
+					auto tex = std::make_shared<Texture2D>(texPath);
+					material->m_normal = tex;
+					textureCache[texPathStr] = tex;
+
+					material->m_descriptorSet->setTexture(material->m_normal, 3);
 					printf("loaded %s\n", mp->diffuse_texname.c_str());
 				}
 			}

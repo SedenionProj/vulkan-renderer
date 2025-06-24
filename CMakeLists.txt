@@ -29,8 +29,4 @@ target_link_libraries(VkRenderer
     spirv-cross-cpp
 )
 
-add_custom_command(TARGET VkRenderer POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/VkRenderer/assets ${CMAKE_BINARY_DIR}/assets)
-
 target_precompile_headers(VkRenderer PRIVATE VkRenderer/src/pch.hpp)

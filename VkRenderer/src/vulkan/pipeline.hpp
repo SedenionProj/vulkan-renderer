@@ -11,6 +11,7 @@ public:
 
 private:
 	void createGraphicsPipeline();
+
 private:
 	VkPipelineLayout m_pipelineLayout;
 	VkPipeline m_handle;

@@ -31,11 +31,11 @@ public:
 	void present();
 	void acquireNexImage();
 
-	VkSwapchainKHR getSwapchain() { return m_swapchain; }
-	uint32_t getSwapchainTexturesCount() { return m_swapchainTexturesCount; }
-	uint32_t getCurrentFrameIndex() { return m_currentFrameIndex; }
-	uint32_t getCurrentImageIndex() { return m_currentImageIndex; }
-	std::shared_ptr<CommandBuffer> getCurrentCommandBuffer() { return m_frameData[m_currentFrameIndex].commandBuffer; }
+	VkSwapchainKHR getSwapchain() const { return m_swapchain; }
+	uint32_t getSwapchainTexturesCount() const { return m_swapchainTexturesCount; }
+	uint32_t getCurrentFrameIndex() const { return m_currentFrameIndex; }
+	uint32_t getCurrentImageIndex() const { return m_currentImageIndex; }
+	std::shared_ptr<CommandBuffer> getCurrentCommandBuffer() const { return m_frameData[m_currentFrameIndex].commandBuffer; }
 private:
 	void createSwapchain();
 	SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device);

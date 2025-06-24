@@ -34,6 +34,8 @@ class UniformBuffer : public Buffer {
 public:
 	UniformBuffer(uint32_t size);
 	void setData(void* data, uint32_t size);
+	uint32_t getSize() { return m_size; }
 private:
+	uint32_t m_size;
 	void* m_mapped;
 };

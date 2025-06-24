@@ -71,10 +71,9 @@ uint32_t formatSize(VkFormat format) {
 	}
 }
 
-
 Shader::Shader() {
-	auto vertShaderCode = readFile("assets/vert.spv");
-	auto fragShaderCode = readFile("assets/frag.spv");
+	auto vertShaderCode = readFile(ASSETS_PATH"/vert.spv");
+	auto fragShaderCode = readFile(ASSETS_PATH"/frag.spv");
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -94,32 +93,16 @@ Shader::Shader() {
 	m_shaderStages[0] = vertShaderStageInfo;
 	m_shaderStages[1] = fragShaderStageInfo;
 
-	spirv_cross::Compiler comp(reinterpret_cast<uint32_t*>(vertShaderCode.data()), vertShaderCode.size()/4);
-	spirv_cross::ShaderResources resources = comp.get_shader_resources();
+	loadData(vertShaderCode, VK_SHADER_STAGE_VERTEX_BIT);
+	loadData(fragShaderCode, VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	uint32_t currOffset = 0;
-	m_attributeDescriptions.reserve(resources.stage_inputs.size());
-	for (auto& resource : resources.stage_inputs) {
-		const spirv_cross::SPIRType& type = comp.get_type(resource.type_id);
-	
-		VkVertexInputAttributeDescription desc{};
-		desc.binding = comp.get_decoration(resource.id, spv::DecorationBinding);
-		desc.location = comp.get_decoration(resource.id, spv::DecorationLocation);
-		desc.format = spirvTypeToVkFormat(type);
-		desc.offset = currOffset;
-		currOffset += formatSize(desc.format);
-		m_attributeDescriptions.emplace_back(desc);
-	}
-
-	m_vertexInputStride = currOffset;
-	
 	createPipelineLayout();
 }
 
 Shader::~Shader()
 {
-	vkDestroyDescriptorSetLayout(Device::getHandle(), m_descriptorSetLayout, nullptr);
-
+	for(auto& layout : m_descriptorSetLayouts)
+		vkDestroyDescriptorSetLayout(Device::getHandle(), layout, nullptr);
 }
 
 VkShaderModule Shader::createShaderModule(const std::vector<char>& code) {
@@ -135,37 +118,107 @@ VkShaderModule Shader::createShaderModule(const std::vector<char>& code) {
 	return shaderModule;
 }
 
+void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
+{
+	spirv_cross::Compiler comp(reinterpret_cast<uint32_t*>(code.data()), code.size() / 4);
+	spirv_cross::ShaderResources resources = comp.get_shader_resources();
+
+	// vertex data
+	if (stage == VK_SHADER_STAGE_VERTEX_BIT) {
+		uint32_t currOffset = 0;
+		m_attributeDescriptions.reserve(resources.stage_inputs.size());
+		for (auto& resource : resources.stage_inputs) {
+			const spirv_cross::SPIRType& type = comp.get_type(resource.type_id);
+
+			VkVertexInputAttributeDescription desc{};
+			desc.binding = comp.get_decoration(resource.id, spv::DecorationBinding);
+			desc.location = comp.get_decoration(resource.id, spv::DecorationLocation);
+			desc.format = spirvTypeToVkFormat(type);
+			desc.offset = currOffset;
+			currOffset += formatSize(desc.format);
+			m_attributeDescriptions.emplace_back(desc);
+		}
+		m_vertexInputStride = currOffset;
+	}
+
+	// uniform data
+	for (auto& uniform : resources.uniform_buffers) {
+		uint32_t binding = comp.get_decoration(uniform.id, spv::DecorationBinding);
+
+		uint32_t targetBinding = binding;
+
+		auto it = std::find_if(
+			m_descriptorInfos.begin(),
+			m_descriptorInfos.end(),
+			[targetBinding](const DescriptorInfo& info) {
+				return info.binding == targetBinding;
+			}
+		);
+
+		if (it != m_descriptorInfos.end()) {
+			DescriptorInfo& match = *it;
+			match.shaderStage |= stage;
+		} else {
+			m_descriptorInfos.push_back({
+			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			stage,
+			binding,
+			comp.get_decoration(uniform.id, spv::DecorationDescriptorSet),
+			});
+		}
+
+		
+	}
+
+	// image sampler data
+	for (auto& image : resources.sampled_images) {
+		m_descriptorInfos.push_back({
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			stage,
+			comp.get_decoration(image.id, spv::DecorationBinding),
+			comp.get_decoration(image.id, spv::DecorationDescriptorSet),
+			});
+	}
+}
+
 void Shader::createPipelineLayout() {
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	bool done = false;
 
-	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	for (int i = 0; i < 4; i++) {
+		std::vector<VkDescriptorSetLayoutBinding> bindings;
 
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+		for (auto& info : m_descriptorInfos) {
+			if (info.set == i) {
+				VkDescriptorSetLayoutBinding layoutBinding{};
+				layoutBinding.binding = info.binding;
+				layoutBinding.descriptorType = info.type;
+				layoutBinding.stageFlags = info.shaderStage;
+				layoutBinding.descriptorCount = 1;
 
-	VkDescriptorSetLayoutCreateInfo layoutInfo{};
-	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutInfo.pBindings = bindings.data();
+				bindings.push_back(layoutBinding);
+			}
+		}
 
-	if (vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &m_descriptorSetLayout) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create descriptor set layout!");
+		if (bindings.empty())
+			continue;
+
+		VkDescriptorSetLayoutCreateInfo layoutInfo{};
+		layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+		layoutInfo.pBindings = bindings.data();
+
+		VkDescriptorSetLayout layout;
+		if (vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &layout) != VK_SUCCESS) {
+			throw std::runtime_error("failed to create descriptor set layout!");
+		}
+
+		m_descriptorSetLayouts.push_back(layout);
 	}
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
-	pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-	pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(m_descriptorSetLayouts.size());
+	pipelineLayoutInfo.pSetLayouts = m_descriptorSetLayouts.data();
 
 	if (vkCreatePipelineLayout(Device::getHandle(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
 		throw std::runtime_error("failed to create pipeline layout!");

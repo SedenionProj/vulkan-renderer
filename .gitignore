@@ -5,6 +5,7 @@
 
 out/
 models/
+*.spv
 
 # User-specific files
 *.rsuser
