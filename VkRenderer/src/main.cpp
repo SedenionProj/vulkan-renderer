@@ -49,18 +49,17 @@ private:
 
 		m_model = std::make_shared<Model>(MODEL_PATH_S.c_str());
 		
-		m_pipeline = std::make_shared<Pipeline>(m_model->m_meshes[0]->m_material->m_shader, m_window->getSwapchain(), m_renderPass);
+		m_pipeline = std::make_shared<Pipeline>(m_model->m_meshes[1]->m_material->m_shader, m_window->getSwapchain(), m_renderPass);
 
 
 		m_uniformBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
-
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 			m_uniformBuffers.emplace_back((uint32_t)sizeof(UniformBufferObject));
 		}
 		
 
 		for (auto mesh : m_model->m_meshes) {
-			if (mesh->m_material->m_albedo != nullptr) {
+			if (mesh->m_material != nullptr) {
 				mesh->m_material->m_descriptorSet->setUniform(m_uniformBuffers, 0);
 			}
 		}
@@ -148,11 +147,8 @@ private:
 
 		// begin
 		commandBuffer->getFence()->wait();
-
 		swapchain->acquireNexImage();
-
 		commandBuffer->reset();
-
 		commandBuffer->beginRecording();
 
 		// per pass
@@ -160,13 +156,13 @@ private:
 		commandBuffer->bindPipeline(m_pipeline);
 
 		commandBuffer->updateViewport(1280, 720);
-
+		int i = 0;
 		for (auto mesh : m_model->m_meshes) {
-			if (mesh->m_material->m_albedo != nullptr && mesh->m_material->m_specular != nullptr && mesh->m_material->m_normal) {
-				//mesh->m_material->m_descriptorSet->setUniform(m_uniformBuffers, 0, m_window->getSwapchain()->getCurrentFrameIndex());
-			}
-			else
+			i++;
+			if (mesh->m_material == nullptr)
+			{
 				continue;
+			}
 
 			VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
 			VkDeviceSize offsets[] = { 0 };
@@ -183,9 +179,7 @@ private:
 
 		// end
 		commandBuffer->endRecording();
-
 		commandBuffer->submit();
-
 		swapchain->present();
 	}
 
@@ -218,6 +212,12 @@ private:
 		glm::mat4 proj;
 		glm::vec4 camPos;
 	};	
+
+	struct UniformMaterialData {
+		float brightness = 0.f;
+		float roughness = 0.f;
+		float reflectance = 0.f;
+	};
 
 private:
 	std::shared_ptr<Window> m_window;

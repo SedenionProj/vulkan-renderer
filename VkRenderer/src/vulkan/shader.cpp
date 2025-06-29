@@ -124,9 +124,21 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 	spirv_cross::ShaderResources resources = comp.get_shader_resources();
 
 	// vertex data
+
 	if (stage == VK_SHADER_STAGE_VERTEX_BIT) {
 		uint32_t currOffset = 0;
 		m_attributeDescriptions.reserve(resources.stage_inputs.size());
+
+		// we want stage_inputs sorted by location
+		std::sort(
+			resources.stage_inputs.begin(),
+			resources.stage_inputs.end(),
+			[&comp](const spirv_cross::Resource& a, const spirv_cross::Resource& b) {
+				return comp.get_decoration(a.id, spv::DecorationLocation) <
+					comp.get_decoration(b.id, spv::DecorationLocation);
+			}
+		);
+
 		for (auto& resource : resources.stage_inputs) {
 			const spirv_cross::SPIRType& type = comp.get_type(resource.type_id);
 
@@ -140,6 +152,35 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 		}
 		m_vertexInputStride = currOffset;
 	}
+	/*
+	if (stage == VK_SHADER_STAGE_VERTEX_BIT) {
+		uint32_t currOffset = 0;
+
+		for (auto& resource : resources.stage_inputs) {
+			const spirv_cross::SPIRType& type = comp.get_type(resource.type_id);
+			VkFormat format = spirvTypeToVkFormat(type);
+
+			VkVertexInputAttributeDescription desc{};
+			desc.binding = 0; // usually 0 if single binding
+			desc.location = comp.get_decoration(resource.id, spv::DecorationLocation);
+			desc.format = format;
+
+			// Use offsetof() instead of currOffset for offset
+			if (resource.name == "inPosition") desc.offset = offsetof(Vertex, pos);
+			else if (resource.name == "inNormal") desc.offset = offsetof(Vertex, normal);
+			else if (resource.name == "inTexCoord") desc.offset = offsetof(Vertex, texCoord);
+			else if (resource.name == "inTangent") desc.offset = offsetof(Vertex, tangent);
+			else if (resource.name == "inBitangent") desc.offset = offsetof(Vertex, bitangent);
+			else {
+				desc.offset = 0; // fallback
+			}
+
+			m_attributeDescriptions.push_back(desc);
+		}
+
+		m_vertexInputStride = sizeof(Vertex);
+	}
+	*/
 
 	// uniform data
 	for (auto& uniform : resources.uniform_buffers) {
@@ -159,9 +200,13 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 			DescriptorInfo& match = *it;
 			match.shaderStage |= stage;
 		} else {
+			auto& bufferType = comp.get_type(uniform.base_type_id);
+			auto bufferSize = comp.get_declared_struct_size(bufferType);
+
 			m_descriptorInfos.push_back({
 			VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			stage,
+			(uint32_t)bufferSize,
 			binding,
 			comp.get_decoration(uniform.id, spv::DecorationDescriptorSet),
 			});
@@ -172,9 +217,11 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 
 	// image sampler data
 	for (auto& image : resources.sampled_images) {
+
 		m_descriptorInfos.push_back({
 			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			stage,
+			0,
 			comp.get_decoration(image.id, spv::DecorationBinding),
 			comp.get_decoration(image.id, spv::DecorationDescriptorSet),
 			});

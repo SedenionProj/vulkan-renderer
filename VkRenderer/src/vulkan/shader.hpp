@@ -7,6 +7,7 @@
 struct DescriptorInfo {
 	VkDescriptorType type;
 	VkShaderStageFlags shaderStage;
+	uint32_t size;
 	uint32_t binding;
 	uint32_t set;
 };

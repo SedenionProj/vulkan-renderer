@@ -18,7 +18,6 @@ void DescriptorSet::createDescriptorPool() {
 			VkDescriptorPoolSize poolSize{};
 			poolSize.type = info.type;
 			poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
 			poolSizes.push_back(poolSize);
 		}
 	}

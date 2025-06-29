@@ -4,9 +4,14 @@
 
 struct Vertex {
 	glm::vec3 pos;
-	glm::vec3 color;
 	glm::vec3 normal;
 	glm::vec2 texCoord;
+	glm::vec3 tangent = glm::vec3(0.0f);
+	glm::vec3 bitangent = glm::vec3(0.0f);
+
+	bool operator==(const Vertex& other) const {
+		return pos == other.pos && texCoord == other.texCoord && normal == other.normal;
+	}
 };
 
 class VertexBuffer;

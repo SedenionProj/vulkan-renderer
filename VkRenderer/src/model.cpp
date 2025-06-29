@@ -2,16 +2,43 @@
 #include "src/vulkan/buffer.hpp"
 #include "src/vulkan/descriptorSet.hpp"
 #include "src/vulkan/shader.hpp"
+#include "src/vulkan/device.hpp"
 #include "src/model.hpp"
 #include "src/material.hpp"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
+namespace std {
+	template<> struct hash<Vertex> {
+		size_t operator()(Vertex const& vertex) const {
+			return ((hash<glm::vec3>()(vertex.pos) ^
+				(hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^
+				(hash<glm::vec2>()(vertex.texCoord) << 1);
+		}
+	};
+}
+
 Mesh::Mesh(std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, std::shared_ptr<Material> material)
 	: m_material(material), m_count(indices.size()) {
 	m_vertexBuffer = std::make_shared<VertexBuffer>(sizeof(vertices[0]) * vertices.size(), vertices.data());
 	m_indexBuffer = std::make_shared<IndexBuffer>(sizeof(indices[0]) * indices.size(), indices.data());
+}
+
+void computeTangentBitangent(
+	const glm::vec3& pos1, const glm::vec3& pos2, const glm::vec3& pos3,
+	const glm::vec2& uv1, const glm::vec2& uv2, const glm::vec2& uv3,
+	glm::vec3& tangent, glm::vec3& bitangent)
+{
+	glm::vec3 edge1 = pos2 - pos1;
+	glm::vec3 edge2 = pos3 - pos1;
+	glm::vec2 deltaUV1 = uv2 - uv1;
+	glm::vec2 deltaUV2 = uv3 - uv1;
+
+	float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+	tangent = f * (deltaUV2.y * edge1 - deltaUV1.y * edge2);
+	bitangent = f * (-deltaUV2.x * edge1 + deltaUV1.x * edge2);
 }
 
 Model::Model(std::filesystem::path filePath) {
@@ -36,90 +63,119 @@ Model::Model(std::filesystem::path filePath) {
 	auto& shapes = reader.GetShapes();
 	auto& materials = reader.GetMaterials();
 
+	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 	std::unordered_map<std::string, std::shared_ptr<Texture2D>> textureCache;
 	m_meshes.reserve(shapes.size());
 
 	auto shader = std::make_shared<Shader>();
 
+	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>("assets/models/viking_room/viking_room.png"); // todo replace by white tex
+
 	for (const auto& shape : shapes) {
 
 		std::vector<Vertex> vertices;
 		std::vector<uint32_t> indices;
-		vertices.reserve(shape.mesh.indices.size());
 		indices.reserve(shape.mesh.indices.size());
 
-		for (const auto& index : shape.mesh.indices) {
-			Vertex vertex{};
+		for (size_t i = 0; i < shape.mesh.indices.size(); i += 3) {
+			std::array<Vertex, 3> triangleVertices;
 
-			vertex.pos = {
-				attrib.vertices[3 * index.vertex_index + 0],
-				attrib.vertices[3 * index.vertex_index + 1],
-				attrib.vertices[3 * index.vertex_index + 2]
-			};
+			for (size_t j = 0; j < 3; ++j) {
+				const auto& index = shape.mesh.indices[i + j];
+				Vertex vertex{};
 
-			vertex.normal = {
-				attrib.normals[3 * index.normal_index + 0],
-				attrib.normals[3 * index.normal_index + 1],
-				attrib.normals[3 * index.normal_index + 2]
-			};
+				vertex.pos = {
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2]
+				};
 
-			vertex.texCoord = {
-				attrib.texcoords[2 * index.texcoord_index + 0],
-				1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
-			};
+				vertex.normal = {
+					attrib.normals[3 * index.normal_index + 0],
+					attrib.normals[3 * index.normal_index + 1],
+					attrib.normals[3 * index.normal_index + 2]
+				};
 
+				vertex.texCoord = {
+					attrib.texcoords[2 * index.texcoord_index + 0],
+					1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+				};
 
-			vertex.color = { 1.0f, 1.0f, 1.0f };
+				triangleVertices[j] = vertex;
+			}
 
+			glm::vec3 tangent, bitangent;
+			computeTangentBitangent(
+				triangleVertices[0].pos, triangleVertices[1].pos, triangleVertices[2].pos,
+				triangleVertices[0].texCoord, triangleVertices[1].texCoord, triangleVertices[2].texCoord,
+				tangent, bitangent
+			);
 
+			for (size_t j = 0; j < 3; ++j) {
+				auto& vertex = triangleVertices[j];
+				vertex.tangent += tangent;
+				vertex.bitangent += bitangent;
 
-			vertices.emplace_back(vertex);
-			indices.emplace_back(indices.size());
+				if (uniqueVertices.count(vertex) == 0) {
+					uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+					vertices.push_back(vertex);
+				}
+
+				indices.emplace_back(uniqueVertices[vertex]);
+			}
 		}
 
-		std::shared_ptr<Material> material = std::make_shared<Material>();
-		material->m_shader = shader;
-		material->m_descriptorSet = std::make_shared<DescriptorSet>(shader, 0);
+
+		std::shared_ptr<Material> material = nullptr;
 
 		if (shape.mesh.material_ids[0] > 0) {
+			material = std::make_shared<Material>();
+			material->m_shader = shader;
+			material->m_descriptorSet = std::make_shared<DescriptorSet>(shader, 0);
+
+			material->m_albedo = defaultTexture;
+			material->m_normal = defaultTexture;
+			material->m_specular = defaultTexture;
+
+
 			const tinyobj::material_t* mp = &materials[shape.mesh.material_ids[0]];
 
 			if (!mp->diffuse_texname.empty()) {
+				material->m_properties.brightness = 1;
 				auto texPath = filePath.parent_path() / mp->diffuse_texname;
 
 				std::string texPathStr = texPath.string();
 				auto it = textureCache.find(texPathStr);
 				if (it != textureCache.end()) {
 					material->m_albedo = it->second;
-					material->m_descriptorSet->setTexture(material->m_albedo, 1);
 				}
 				else {
 					auto tex = std::make_shared<Texture2D>(texPath);
 					material->m_albedo = tex;
 					textureCache[texPathStr] = tex;
 
-					material->m_descriptorSet->setTexture(material->m_albedo, 1);
+					
 					printf("loaded %s\n", mp->diffuse_texname.c_str());
 				}
 			}
 
 			if (!mp->specular_texname.empty()) {
+				material->m_properties.reflectance = 1.f;
 				auto texPath = filePath.parent_path() / mp->specular_texname;
 
 				std::string texPathStr = texPath.string();
 				auto it = textureCache.find(texPathStr);
 				if (it != textureCache.end()) {
 					material->m_specular = it->second;
-					material->m_descriptorSet->setTexture(material->m_specular, 2);
 				}
 				else {
 					auto tex = std::make_shared<Texture2D>(texPath);
 					material->m_specular = tex;
 					textureCache[texPathStr] = tex;
 
-					material->m_descriptorSet->setTexture(material->m_specular, 2);
 					printf("loaded %s\n", mp->diffuse_texname.c_str());
 				}
+
 			}
 
 			if (!mp->normal_texname.empty()) {
@@ -129,36 +185,38 @@ Model::Model(std::filesystem::path filePath) {
 				auto it = textureCache.find(texPathStr);
 				if (it != textureCache.end()) {
 					material->m_normal = it->second;
-					material->m_descriptorSet->setTexture(material->m_normal, 3);
 				}
 				else {
 					auto tex = std::make_shared<Texture2D>(texPath);
 					material->m_normal = tex;
 					textureCache[texPathStr] = tex;
 
-					material->m_descriptorSet->setTexture(material->m_normal, 3);
 					printf("loaded %s\n", mp->diffuse_texname.c_str());
 				}
 			}
 
 			if (!mp->bump_texname.empty()) {
+				material->m_properties.roughness = 1.f;
 				auto texPath = filePath.parent_path() / mp->bump_texname;
 
 				std::string texPathStr = texPath.string();
 				auto it = textureCache.find(texPathStr);
 				if (it != textureCache.end()) {
 					material->m_normal = it->second;
-					material->m_descriptorSet->setTexture(material->m_normal, 3);
 				}
 				else {
 					auto tex = std::make_shared<Texture2D>(texPath);
 					material->m_normal = tex;
 					textureCache[texPathStr] = tex;
 
-					material->m_descriptorSet->setTexture(material->m_normal, 3);
 					printf("loaded %s\n", mp->diffuse_texname.c_str());
 				}
 			}
+			material->m_descriptorSet->setTexture(material->m_albedo, 1);
+			material->m_descriptorSet->setTexture(material->m_specular, 2);
+			material->m_descriptorSet->setTexture(material->m_normal, 3);
+
+			material->createUniformBuffers();
 		}
 
 
