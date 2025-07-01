@@ -30,15 +30,25 @@ private:
 	void initVulkan() {
 		m_window = std::make_shared<Window>();
 
-		
+		m_depthTexture = std::make_shared<Texture2D>(1280, 720, Device::get()->getPhysicalDevice().findDepthFormat());
+		m_depthTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SAMPLE_COUNT_8_BIT);
+		m_depthTexture->createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
+
+		m_colorTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat);
+		m_colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL, 
+			VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SAMPLE_COUNT_8_BIT);
+		m_colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+
 		m_renderPass = std::make_shared<RenderPass>();
-		m_depthTexture = std::make_shared<Texture2D>(1280, 720);
-		m_depthTexture->createImage(Device::get()->getPhysicalDevice().findDepthFormat(), VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		m_depthTexture->createImageView(Device::get()->getPhysicalDevice().findDepthFormat(), VK_IMAGE_ASPECT_DEPTH_BIT);
+
 		for (int i = 0; i < m_window->getSwapchain()->getSwapchainTexturesCount(); i++) {
 			std::vector<std::shared_ptr<Texture2D>> textures = {
-				m_window->getSwapchain()->m_swapchainTextures[i],
-				m_depthTexture
+				m_colorTexture,
+				m_depthTexture,
+				m_window->getSwapchain()->m_swapchainTextures[i]
 			};
 
 			m_swapChainFramebuffers.emplace_back(std::make_shared<Framebuffer>(
@@ -63,8 +73,6 @@ private:
 				mesh->m_material->m_descriptorSet->setUniform(m_uniformBuffers, 0);
 			}
 		}
-
-		//m_descriptorSet = std::make_shared<DescriptorSet>(m_model->m_meshes[0]->m_material->m_shader);
 	}
 	
 	void updateUniformBuffer(uint32_t currentImage) {
@@ -160,9 +168,7 @@ private:
 		for (auto mesh : m_model->m_meshes) {
 			i++;
 			if (mesh->m_material == nullptr)
-			{
 				continue;
-			}
 
 			VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
 			VkDeviceSize offsets[] = { 0 };
@@ -173,8 +179,6 @@ private:
 			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
 		}
-
-
 		commandBuffer->endRenderPass();
 
 		// end
@@ -228,6 +232,7 @@ private:
 	std::shared_ptr<Pipeline> m_pipeline;
 	std::vector<UniformBuffer> m_uniformBuffers;
 	std::shared_ptr<Texture2D> m_depthTexture;
+	std::shared_ptr<Texture2D> m_colorTexture;
 	std::vector<std::shared_ptr<Framebuffer>> m_swapChainFramebuffers;
 
 

@@ -21,6 +21,7 @@ private:
 class CommandBuffer {
 public:
 	CommandBuffer(VkCommandPool m_commandPool);
+	CommandBuffer();
 	~CommandBuffer();
 
 	void beginRecording();
