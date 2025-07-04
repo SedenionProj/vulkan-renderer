@@ -2,15 +2,26 @@
 
 #include "src/vulkan/swapchain.hpp"
 
+class Texture2D;
+
+struct Attachment {
+	enum class Type {
+		COLOR,
+		DEPTH,
+		PRESENT
+	};
+
+	std::shared_ptr<Texture2D> texture;
+	Type type;
+	uint32_t binding;
+};
+
 class RenderPass {
 public:
-	RenderPass();
+	RenderPass(std::initializer_list<Attachment> attachmentInfos);
 	~RenderPass();
 
-	VkRenderPass getHandle() { return m_handle; }
-
-private:
-	void createRenderPass();
+	VkRenderPass getHandle() const { return m_handle; }
 
 private:
 	VkRenderPass m_handle;

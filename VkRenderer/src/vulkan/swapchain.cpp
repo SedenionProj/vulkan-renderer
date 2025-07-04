@@ -139,7 +139,7 @@ void Swapchain::createSwapchain() {
 			throw std::runtime_error("failed to create image views!");
 		}
 
-		m_swapchainTextures.emplace_back(std::make_shared<Texture2D>(swapchainImages[i], imageView, m_swapchainExtent.width, m_swapchainExtent.height));
+		m_swapchainTextures.emplace_back(std::make_shared<Texture2D>(swapchainImages[i], imageView, m_swapchainExtent.width, m_swapchainExtent.height, m_swapchainImageFormat));
 	}
 }
 

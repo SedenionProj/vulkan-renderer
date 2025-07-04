@@ -67,7 +67,7 @@ Model::Model(std::filesystem::path filePath) {
 	std::unordered_map<std::string, std::shared_ptr<Texture2D>> textureCache;
 	m_meshes.reserve(shapes.size());
 
-	auto shader = std::make_shared<Shader>();
+	auto shader = std::make_shared<Shader>("basicVert.spv", "basicFrag.spv");
 
 	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>("assets/models/viking_room/viking_room.png"); // todo replace by white tex
 

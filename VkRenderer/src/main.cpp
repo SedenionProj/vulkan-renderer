@@ -9,20 +9,12 @@
 #include "src/window.hpp"
 #include "src/material.hpp"
 
-
-const std::string MODEL_PATH = "assets/models/viking_room/viking_room.obj";
-const std::string TEXTURE_PATH = "assets/models/viking_room/viking_room.png";
-
-const std::string MODEL_PATH_S = "assets/models/sponza/sponza.obj";
-const std::string TEXTURE_PATH_S = "assets/models/sponza/textures/spnza_bricks_a_bump.png";
-
 class Renderer {
 
 public:
 	void run() {
 		initVulkan();
 		mainLoop();
-		cleanup();
 	}
 
 private:
@@ -30,47 +22,74 @@ private:
 	void initVulkan() {
 		m_window = std::make_shared<Window>();
 
-		m_depthTexture = std::make_shared<Texture2D>(1280, 720, Device::get()->getPhysicalDevice().findDepthFormat());
-		m_depthTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
+		// scene
+		m_sceneData.depthTexture = std::make_shared<Texture2D>(1280, 720, Device::get()->getPhysicalDevice().findDepthFormat(), VK_SAMPLE_COUNT_1_BIT);
+		m_sceneData.depthTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SAMPLE_COUNT_8_BIT);
-		m_depthTexture->createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		m_sceneData.depthTexture->createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		m_colorTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat);
-		m_colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL, 
-			VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_SAMPLE_COUNT_8_BIT);
-		m_colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+		m_sceneData.colorTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
+		m_sceneData.colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		m_sceneData.colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+		m_sceneData.colorTexture->createSampler();
 
-		m_renderPass = std::make_shared<RenderPass>();
-
+		m_sceneData.renderPass = std::make_shared<RenderPass>(
+			std::initializer_list<Attachment>
+			{ { m_sceneData.colorTexture, Attachment::Type::COLOR ,0},
+			  { m_sceneData.depthTexture, Attachment::Type::DEPTH, 1 }}
+		);
 		for (int i = 0; i < m_window->getSwapchain()->getSwapchainTexturesCount(); i++) {
 			std::vector<std::shared_ptr<Texture2D>> textures = {
-				m_colorTexture,
-				m_depthTexture,
+				m_sceneData.colorTexture,
+				m_sceneData.depthTexture,
+			};
+
+			m_sceneData.framebuffers.emplace_back(std::make_shared<Framebuffer>(
+				textures,
+				m_sceneData.renderPass
+			));
+		}
+
+		m_sceneData.model = std::make_shared<Model>("assets/models/sponza/sponza.obj");
+
+		m_sceneData.pipeline = std::make_shared<Pipeline>(m_sceneData.model->m_meshes[1]->m_material->m_shader, m_sceneData.renderPass, VK_SAMPLE_COUNT_1_BIT);
+
+		// post process
+		m_postProcessData.renderPass = std::make_shared<RenderPass>(
+			std::initializer_list<Attachment>
+		{ { m_window->getSwapchain()->m_swapchainTextures[0], Attachment::Type::PRESENT, 0 }}
+		);
+		for (int i = 0; i < m_window->getSwapchain()->getSwapchainTexturesCount(); i++) {
+			std::vector<std::shared_ptr<Texture2D>> textures = {
 				m_window->getSwapchain()->m_swapchainTextures[i]
 			};
 
 			m_swapChainFramebuffers.emplace_back(std::make_shared<Framebuffer>(
 				textures,
-				m_renderPass
+				m_postProcessData.renderPass
 			));
 		}
 
-		m_model = std::make_shared<Model>(MODEL_PATH_S.c_str());
-		
-		m_pipeline = std::make_shared<Pipeline>(m_model->m_meshes[1]->m_material->m_shader, m_window->getSwapchain(), m_renderPass);
+		m_postProcessData.shader = std::make_shared<Shader>("postProcessVert.spv", "postProcessFrag.spv");
+
+		m_postProcessData.descriptorSet = std::make_shared<DescriptorSet>(m_postProcessData.shader, 0);
+		m_postProcessData.descriptorSet->setTexture(m_sceneData.colorTexture, 0);
+		m_postProcessData.pipeline = std::make_shared<Pipeline>(m_postProcessData.shader, m_postProcessData.renderPass, VK_SAMPLE_COUNT_1_BIT);
 
 
-		m_uniformBuffers.reserve(MAX_FRAMES_IN_FLIGHT);
+		// UBO
+		m_transformUBO.reserve(MAX_FRAMES_IN_FLIGHT);
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			m_uniformBuffers.emplace_back((uint32_t)sizeof(UniformBufferObject));
+			m_transformUBO.emplace_back((uint32_t)sizeof(UniformBufferObject));
 		}
 		
 
-		for (auto mesh : m_model->m_meshes) {
+		for (auto mesh : m_sceneData.model->m_meshes) {
 			if (mesh->m_material != nullptr) {
-				mesh->m_material->m_descriptorSet->setUniform(m_uniformBuffers, 0);
+				mesh->m_material->m_descriptorSet->setUniform(m_transformUBO, 0);
 			}
 		}
 	}
@@ -143,7 +162,7 @@ private:
 		ubo.proj[1][1] *= -1;
 		ubo.camPos = glm::vec4(cameraPos,1);
 
-		m_uniformBuffers[currentImage].setData(&ubo, sizeof(ubo));
+		m_transformUBO[currentImage].setData(&ubo, sizeof(ubo));
 
 	}
 
@@ -159,13 +178,13 @@ private:
 		commandBuffer->reset();
 		commandBuffer->beginRecording();
 
-		// per pass
-		commandBuffer->beginRenderpass(m_renderPass, m_swapChainFramebuffers[swapchain->getCurrentImageIndex()], 1280, 720);
-		commandBuffer->bindPipeline(m_pipeline);
+		// scene pass
+		commandBuffer->beginRenderpass(m_sceneData.renderPass, m_sceneData.framebuffers[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->bindPipeline(m_sceneData.pipeline);
 
 		commandBuffer->updateViewport(1280, 720);
 		int i = 0;
-		for (auto mesh : m_model->m_meshes) {
+		for (auto mesh : m_sceneData.model->m_meshes) {
 			i++;
 			if (mesh->m_material == nullptr)
 				continue;
@@ -179,6 +198,17 @@ private:
 			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
 		}
+		commandBuffer->endRenderPass();
+		
+		// post processing pass
+		commandBuffer->beginRenderpass(m_postProcessData.renderPass, m_swapChainFramebuffers[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->bindPipeline(m_postProcessData.pipeline);
+		
+		VkDescriptorSet postProcessDescriptorSet = m_postProcessData.descriptorSet->getHandle(swapchain->getCurrentFrameIndex());
+		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_postProcessData.shader->getPipelineLayout(), 0, 1, &postProcessDescriptorSet, 0, nullptr);
+
+		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
+
 		commandBuffer->endRenderPass();
 
 		// end
@@ -199,43 +229,40 @@ private:
 
 	}
 
-	void cleanup() {
-
-	}
-
-
-
-	bool hasStencilComponent(VkFormat format) {
-		return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
-	}
 private:
-	
 	struct UniformBufferObject {
 		glm::mat4 model;
 		glm::mat4 view;
 		glm::mat4 proj;
 		glm::vec4 camPos;
-	};	
-
-	struct UniformMaterialData {
-		float brightness = 0.f;
-		float roughness = 0.f;
-		float reflectance = 0.f;
 	};
 
 private:
 	std::shared_ptr<Window> m_window;
-	std::shared_ptr<Model> m_model;
 
-	std::shared_ptr<RenderPass> m_renderPass;
-	std::shared_ptr<DescriptorSet> m_descriptorSet;
-	std::shared_ptr<Pipeline> m_pipeline;
-	std::vector<UniformBuffer> m_uniformBuffers;
-	std::shared_ptr<Texture2D> m_depthTexture;
-	std::shared_ptr<Texture2D> m_colorTexture;
+	std::vector<UniformBuffer> m_transformUBO;
+
+	struct SceneData {
+		std::shared_ptr<Model> model;
+		std::shared_ptr<RenderPass> renderPass;
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<Texture2D> colorTexture;
+		std::shared_ptr<Texture2D> depthTexture;
+		std::vector<std::shared_ptr<Framebuffer>> framebuffers;
+	};
+
+	struct PostProcessData {
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<RenderPass> renderPass;
+		std::shared_ptr<DescriptorSet> descriptorSet;
+		std::shared_ptr<Shader> shader;
+	};
+	
+	PostProcessData m_postProcessData;
+	SceneData m_sceneData;
+
+	
 	std::vector<std::shared_ptr<Framebuffer>> m_swapChainFramebuffers;
-
-
 };
 
 int main() {

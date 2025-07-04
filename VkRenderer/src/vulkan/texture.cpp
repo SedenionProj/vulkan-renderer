@@ -5,10 +5,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-Texture2D::Texture2D(VkImage image, VkImageView imageView, uint32_t width, uint32_t height)
-	: m_image(image), m_imageView(imageView), m_width(width), m_height(height){
-
-}
+Texture2D::Texture2D(VkImage image, VkImageView imageView, uint32_t width, uint32_t height, VkFormat format)
+	: m_image(image), m_imageView(imageView), m_width(width), m_height(height), m_format(format) {}
 
 Texture2D::Texture2D(std::filesystem::path path) {
 	// load texture
@@ -17,9 +15,7 @@ Texture2D::Texture2D(std::filesystem::path path) {
 
 	m_width = static_cast<uint32_t>(width);
 	m_height = static_cast<uint32_t>(height);
-
 	m_format = VK_FORMAT_R8G8B8A8_SRGB;
-
 	m_mipLevels = static_cast<uint32_t>(glm::floor(glm::log2(std::max(static_cast<float>(width), static_cast<float>(height))))) + 1;
 
 	VkDeviceSize imageSize = width * height * 4;
@@ -57,8 +53,8 @@ Texture2D::Texture2D(std::filesystem::path path) {
 	generateMipmaps();
 }
 
-Texture2D::Texture2D(uint32_t width, uint32_t height, VkFormat format)
-	 : m_width(width), m_height(height), m_format(format) {}
+Texture2D::Texture2D(uint32_t width, uint32_t height, VkFormat format, VkSampleCountFlagBits sampleCount)
+	 : m_width(width), m_height(height), m_format(format), m_sampleCount(sampleCount) {}
 
 Texture2D::~Texture2D()
 {
@@ -85,7 +81,7 @@ void Texture2D::createImageView(VkImageAspectFlags aspectFlags) {
 	}
 }
 
-void Texture2D::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkSampleCountFlagBits numSamples) {
+void Texture2D::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) {
 	VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -98,7 +94,7 @@ void Texture2D::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMem
 	imageInfo.tiling = tiling;
 	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	imageInfo.usage = usage;
-	imageInfo.samples = numSamples;
+	imageInfo.samples = m_sampleCount;
 	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
 	if (vkCreateImage(Device::getHandle(), &imageInfo, nullptr, &m_image) != VK_SUCCESS) {

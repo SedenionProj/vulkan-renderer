@@ -71,9 +71,12 @@ uint32_t formatSize(VkFormat format) {
 	}
 }
 
-Shader::Shader() {
-	auto vertShaderCode = readFile(ASSETS_PATH"/vert.spv");
-	auto fragShaderCode = readFile(ASSETS_PATH"/frag.spv");
+Shader::Shader(const char* vertPath, const char* fragPath) {
+	std::string vertFullPath = std::string(ASSETS_PATH) + vertPath;
+	std::string fragFullPath = std::string(ASSETS_PATH) + fragPath;
+
+	auto vertShaderCode = readFile(vertFullPath.c_str());
+	auto fragShaderCode = readFile(fragFullPath.c_str());
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 	VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);

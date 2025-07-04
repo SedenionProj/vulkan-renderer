@@ -2,7 +2,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#define ASSETS_PATH "../../../VkRenderer/assets"
+#define ASSETS_PATH "../../../VkRenderer/assets/"
 
 struct DescriptorInfo {
 	VkDescriptorType type;
@@ -14,7 +14,7 @@ struct DescriptorInfo {
 
 class Shader {
 public:
-	Shader();
+	Shader(const char* vertPath, const char* fragPath);
 	~Shader();
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);

@@ -1,17 +1,8 @@
 #include "src/vulkan/pipeline.hpp"
 #include "src/vulkan/device.hpp"
 
-Pipeline::Pipeline(std::shared_ptr<Shader> shader, std::shared_ptr<Swapchain> swapchain, std::shared_ptr<RenderPass> renderPass)
-	: m_swapchain(swapchain), m_shader(shader), m_renderPass(renderPass) {
-	createGraphicsPipeline();
-}
-
-Pipeline::~Pipeline() {
-	vkDestroyPipeline(Device::getHandle(), m_handle, nullptr);
-	vkDestroyPipelineLayout(Device::getHandle(), m_pipelineLayout, nullptr);
-}
-
-void Pipeline::createGraphicsPipeline() {
+Pipeline::Pipeline(std::shared_ptr<Shader> shader, std::shared_ptr<RenderPass> renderPass, VkSampleCountFlagBits samples)
+	: m_shader(shader), m_renderPass(renderPass) {
 	m_pipelineLayout = m_shader->getPipelineLayout();
 
 	std::vector<VkDynamicState> dynamicStates = {
@@ -37,31 +28,23 @@ void Pipeline::createGraphicsPipeline() {
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
 	vertexInputInfo.vertexAttributeDescriptionCount = m_shader->getAttributeDescriptions().size();
 	vertexInputInfo.pVertexAttributeDescriptions = m_shader->getAttributeDescriptions().data();
+	bool noVertexInput = m_shader->getVertexInputStride() == 0 && m_shader->getAttributeDescriptions().empty();
+	if (noVertexInput) {
+		vertexInputInfo.vertexBindingDescriptionCount = 0; // todo
+		vertexInputInfo.pVertexBindingDescriptions = nullptr;
+		vertexInputInfo.vertexAttributeDescriptionCount = 0;
+		vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+	}
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-	// viewport
-	VkViewport viewport{};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = (float)m_swapchain->m_swapchainExtent.width;
-	viewport.height = (float)m_swapchain->m_swapchainExtent.height;
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-
-	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
-	scissor.extent = m_swapchain->m_swapchainExtent;
-
 	VkPipelineViewportStateCreateInfo viewportState{};
 	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	viewportState.viewportCount = 1;
-	//viewportState.pViewports = &viewport;
 	viewportState.scissorCount = 1;
-	//viewportState.pScissors = &scissor;
 
 	VkPipelineRasterizationStateCreateInfo rasterizer{};
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -76,7 +59,7 @@ void Pipeline::createGraphicsPipeline() {
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_8_BIT; // tmp
+	multisampling.rasterizationSamples = samples; // tmp
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -130,6 +113,11 @@ void Pipeline::createGraphicsPipeline() {
 		throw std::runtime_error("failed to create graphics pipeline!");
 	}
 
-	//vkDestroyShaderModule(Device::getHandle(), fragShaderModule, nullptr);
+	//vkDestroyShaderModule(Device::getHandle(), fragShaderModule, nullptr);	// todo
 	//vkDestroyShaderModule(Device::getHandle(), vertShaderModule, nullptr);
+}
+
+Pipeline::~Pipeline() {
+	vkDestroyPipeline(Device::getHandle(), m_handle, nullptr);
+	vkDestroyPipelineLayout(Device::getHandle(), m_pipelineLayout, nullptr);
 }
