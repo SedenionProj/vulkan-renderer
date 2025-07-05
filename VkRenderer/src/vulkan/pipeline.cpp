@@ -1,9 +1,32 @@
 #include "src/vulkan/pipeline.hpp"
 #include "src/vulkan/device.hpp"
+#include "src/vulkan/framebuffer.hpp"
 
-Pipeline::Pipeline(std::shared_ptr<Shader> shader, std::shared_ptr<RenderPass> renderPass, VkSampleCountFlagBits samples)
-	: m_shader(shader), m_renderPass(renderPass) {
+Pipeline::Pipeline(PipelineDesc info)
+	: m_shader(info.shader) {
 	m_pipelineLayout = m_shader->getPipelineLayout();
+
+	m_renderPass = std::make_shared<RenderPass>(info.attachmentInfos);
+
+	VkSampleCountFlagBits sampleCount = info.sampleCount;
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		std::vector<std::shared_ptr<Texture2D>> textures;
+
+		for (auto& attachmentInfo : info.attachmentInfos) {
+			if (attachmentInfo.type == Attachment::Type::PRESENT && info.swapchain != nullptr) {
+				textures.emplace_back(info.swapchain->m_swapchainTextures[i]);
+			} else {
+				textures.emplace_back(attachmentInfo.texture);
+			}
+
+		}
+
+		m_framebuffers.emplace_back(std::make_shared<Framebuffer>(
+			textures,
+			m_renderPass
+		));
+	}
 
 	std::vector<VkDynamicState> dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
@@ -59,7 +82,7 @@ Pipeline::Pipeline(std::shared_ptr<Shader> shader, std::shared_ptr<RenderPass> r
 	VkPipelineMultisampleStateCreateInfo multisampling{};
 	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisampling.sampleShadingEnable = VK_FALSE;
-	multisampling.rasterizationSamples = samples; // tmp
+	multisampling.rasterizationSamples = sampleCount; // tmp
 
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;

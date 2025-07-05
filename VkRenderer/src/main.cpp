@@ -21,63 +21,48 @@ private:
 
 	void initVulkan() {
 		m_window = std::make_shared<Window>();
-
 		// scene
-		m_sceneData.depthTexture = std::make_shared<Texture2D>(1280, 720, Device::get()->getPhysicalDevice().findDepthFormat(), VK_SAMPLE_COUNT_1_BIT);
+		m_sceneData.depthTexture = std::make_shared<Texture2D>(1280, 720, Device::get()->getPhysicalDevice().findDepthFormat(), VK_SAMPLE_COUNT_8_BIT);
 		m_sceneData.depthTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		m_sceneData.depthTexture->createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		m_sceneData.colorTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
+		m_sceneData.colorTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_8_BIT);
 		m_sceneData.colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		m_sceneData.colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
-		m_sceneData.colorTexture->createSampler();
 
-		m_sceneData.renderPass = std::make_shared<RenderPass>(
-			std::initializer_list<Attachment>
-			{ { m_sceneData.colorTexture, Attachment::Type::COLOR ,0},
-			  { m_sceneData.depthTexture, Attachment::Type::DEPTH, 1 }}
-		);
-		for (int i = 0; i < m_window->getSwapchain()->getSwapchainTexturesCount(); i++) {
-			std::vector<std::shared_ptr<Texture2D>> textures = {
-				m_sceneData.colorTexture,
-				m_sceneData.depthTexture,
-			};
-
-			m_sceneData.framebuffers.emplace_back(std::make_shared<Framebuffer>(
-				textures,
-				m_sceneData.renderPass
-			));
-		}
+		m_sceneData.resolveTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
+		m_sceneData.resolveTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		m_sceneData.resolveTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+		m_sceneData.resolveTexture->createSampler();
 
 		m_sceneData.model = std::make_shared<Model>("assets/models/sponza/sponza.obj");
 
-		m_sceneData.pipeline = std::make_shared<Pipeline>(m_sceneData.model->m_meshes[1]->m_material->m_shader, m_sceneData.renderPass, VK_SAMPLE_COUNT_1_BIT);
+		PipelineDesc pipelineDesc{};
+		pipelineDesc.shader = m_sceneData.model->m_meshes[1]->m_material->m_shader;
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
+		pipelineDesc.attachmentInfos = {
+			{ m_sceneData.colorTexture, Attachment::Type::COLOR, 0 },
+			{ m_sceneData.depthTexture, Attachment::Type::DEPTH, 1 },
+			{ m_sceneData.resolveTexture, Attachment::Type::COLOR, 2, true} };
+
+
+		m_sceneData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
 		// post process
-		m_postProcessData.renderPass = std::make_shared<RenderPass>(
-			std::initializer_list<Attachment>
-		{ { m_window->getSwapchain()->m_swapchainTextures[0], Attachment::Type::PRESENT, 0 }}
-		);
-		for (int i = 0; i < m_window->getSwapchain()->getSwapchainTexturesCount(); i++) {
-			std::vector<std::shared_ptr<Texture2D>> textures = {
-				m_window->getSwapchain()->m_swapchainTextures[i]
-			};
+		pipelineDesc.shader = std::make_shared<Shader>("postProcessVert.spv", "postProcessFrag.spv");
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+		pipelineDesc.attachmentInfos = { { m_window->getSwapchain()->m_swapchainTextures[0], Attachment::Type::PRESENT, 0 } };
+		pipelineDesc.swapchain = m_window->getSwapchain();
 
-			m_swapChainFramebuffers.emplace_back(std::make_shared<Framebuffer>(
-				textures,
-				m_postProcessData.renderPass
-			));
-		}
-
-		m_postProcessData.shader = std::make_shared<Shader>("postProcessVert.spv", "postProcessFrag.spv");
-
-		m_postProcessData.descriptorSet = std::make_shared<DescriptorSet>(m_postProcessData.shader, 0);
-		m_postProcessData.descriptorSet->setTexture(m_sceneData.colorTexture, 0);
-		m_postProcessData.pipeline = std::make_shared<Pipeline>(m_postProcessData.shader, m_postProcessData.renderPass, VK_SAMPLE_COUNT_1_BIT);
+		m_postProcessData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+		m_postProcessData.descriptorSet->setTexture(m_sceneData.resolveTexture, 0);
+		m_postProcessData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
 
 		// UBO
@@ -179,13 +164,12 @@ private:
 		commandBuffer->beginRecording();
 
 		// scene pass
-		commandBuffer->beginRenderpass(m_sceneData.renderPass, m_sceneData.framebuffers[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->beginRenderpass(m_sceneData.pipeline->getRenderPass(), m_sceneData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_sceneData.pipeline);
 
 		commandBuffer->updateViewport(1280, 720);
-		int i = 0;
+
 		for (auto mesh : m_sceneData.model->m_meshes) {
-			i++;
 			if (mesh->m_material == nullptr)
 				continue;
 
@@ -193,7 +177,6 @@ private:
 			VkDeviceSize offsets[] = { 0 };
 			VkDescriptorSet descriptorSets[] = { mesh->m_material->m_descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
 			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->m_material->m_shader->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
-
 			vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
 			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
@@ -201,11 +184,11 @@ private:
 		commandBuffer->endRenderPass();
 		
 		// post processing pass
-		commandBuffer->beginRenderpass(m_postProcessData.renderPass, m_swapChainFramebuffers[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->beginRenderpass(m_postProcessData.pipeline->getRenderPass(), m_postProcessData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_postProcessData.pipeline);
 		
 		VkDescriptorSet postProcessDescriptorSet = m_postProcessData.descriptorSet->getHandle(swapchain->getCurrentFrameIndex());
-		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_postProcessData.shader->getPipelineLayout(), 0, 1, &postProcessDescriptorSet, 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_postProcessData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &postProcessDescriptorSet, 0, nullptr);
 
 		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
 
@@ -244,25 +227,21 @@ private:
 
 	struct SceneData {
 		std::shared_ptr<Model> model;
-		std::shared_ptr<RenderPass> renderPass;
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<Texture2D> colorTexture;
+		std::shared_ptr<Texture2D> resolveTexture;
 		std::shared_ptr<Texture2D> depthTexture;
-		std::vector<std::shared_ptr<Framebuffer>> framebuffers;
+		
 	};
 
 	struct PostProcessData {
 		std::shared_ptr<Pipeline> pipeline;
-		std::shared_ptr<RenderPass> renderPass;
 		std::shared_ptr<DescriptorSet> descriptorSet;
-		std::shared_ptr<Shader> shader;
 	};
 	
 	PostProcessData m_postProcessData;
 	SceneData m_sceneData;
 
-	
-	std::vector<std::shared_ptr<Framebuffer>> m_swapChainFramebuffers;
 };
 
 int main() {

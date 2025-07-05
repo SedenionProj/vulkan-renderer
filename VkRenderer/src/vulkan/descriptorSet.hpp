@@ -18,6 +18,8 @@ public:
 	void setTexture(std::shared_ptr<Texture2D> texture, uint32_t binding);
 	//void setTexture(std::shared_ptr<Texture2D> texture, uint32_t binding, uint32_t frameIndex);
 
+	std::shared_ptr<Shader> getShader() { return m_shader; }
+
 private:
 	void createDescriptorPool();
 	void createDescriptorSets();

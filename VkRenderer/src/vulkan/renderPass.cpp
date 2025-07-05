@@ -6,26 +6,16 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos) {
 	std::vector<VkAttachmentDescription> attachmentDescriptions;
 	attachmentDescriptions.reserve(attachmentInfos.size());
 
-	std::vector<VkAttachmentReference> attachmentReferences;
-	attachmentReferences.reserve(attachmentInfos.size());
-
-	VkAttachmentReference colorAttachmentRef;
-	VkAttachmentReference depthAttachmentRef;
+	std::vector<VkAttachmentReference> colorAttachmentRef;
+	std::vector<VkAttachmentReference> depthAttachmentRef;
 	VkAttachmentReference colorAttachmentResolveRef;
 
-	VkSubpassDescription subpass{};
-	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	bool resolve = false;
 
 	for (auto& attachmentInfo : attachmentInfos) {
 		// ref
 		VkAttachmentReference ref{};
 		ref.attachment = attachmentInfo.binding;
-		if (attachmentInfo.type == Attachment::Type::COLOR || attachmentInfo.type == Attachment::Type::PRESENT) {
-			ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-		}
-		if (attachmentInfo.type == Attachment::Type::DEPTH) {
-			ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-		}
 
 		// desc
 		std::shared_ptr<Texture2D> tex = attachmentInfo.texture;
@@ -39,30 +29,40 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos) {
 		desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
 		if (attachmentInfo.type == Attachment::Type::COLOR) {
-			colorAttachmentRef = ref;
 			desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // todo
-			subpass.colorAttachmentCount = 1;
-			subpass.pColorAttachments = &colorAttachmentRef;
 		}
 		if (attachmentInfo.type == Attachment::Type::DEPTH) {
-			depthAttachmentRef = ref;
 			desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 			desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-			subpass.pDepthStencilAttachment = &depthAttachmentRef;
+
+			ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+			depthAttachmentRef.push_back(ref);
 		}
 		if (attachmentInfo.type == Attachment::Type::PRESENT) {
-			colorAttachmentResolveRef = ref;
-			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 			desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-			subpass.colorAttachmentCount = 1;
-			subpass.pColorAttachments = &colorAttachmentResolveRef;
+		}
+
+		if (attachmentInfo.type == Attachment::Type::COLOR || attachmentInfo.type == Attachment::Type::PRESENT) {
+			ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			if (attachmentInfo.resolve) {
+				colorAttachmentResolveRef = ref;
+				resolve = true;
+			} else {
+				colorAttachmentRef.push_back(ref);
+			}
+				
 		}
 
 		attachmentDescriptions.emplace_back(desc);
 	}
 
 	
-	
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = static_cast<uint32_t>(colorAttachmentRef.size());
+	subpass.pColorAttachments = colorAttachmentRef.data();
+	subpass.pDepthStencilAttachment = depthAttachmentRef.data();
+	subpass.pResolveAttachments = resolve ? &colorAttachmentResolveRef : nullptr;
 
 	VkSubpassDependency dependency{};
 	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
@@ -78,7 +78,7 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos) {
 	renderPassInfo.pAttachments = attachmentDescriptions.data();
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
-	renderPassInfo.dependencyCount = 0;
+	//renderPassInfo.dependencyCount = 1;
 	//renderPassInfo.pDependencies = &dependency;
 
 	if (vkCreateRenderPass(Device::getHandle(), &renderPassInfo, nullptr, &m_handle) != VK_SUCCESS) {

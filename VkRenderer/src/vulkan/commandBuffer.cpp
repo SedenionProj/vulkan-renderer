@@ -54,9 +54,11 @@ void CommandBuffer::beginRecording() {
 void CommandBuffer::beginRenderpass(std::shared_ptr<RenderPass> renderPass, std::shared_ptr<Framebuffer> framebuffer, uint32_t width, uint32_t height)
 {
 	m_renderPass = renderPass;
-	std::array<VkClearValue, 2> clearValues{};
+	std::array<VkClearValue, 3> clearValues{};
 	clearValues[0].color = { {0.01f, 0.01f, 0.01f, 1.0f} };
 	clearValues[1].depthStencil = { 1.0f, 0 };
+	clearValues[2].color = { {0.01f, 0.01f, 0.01f, 1.0f} };
+
 
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -118,8 +120,8 @@ void CommandBuffer::submit(bool semaphores)
 
 void CommandBuffer::bindPipeline(std::shared_ptr<Pipeline> pipeline)
 {
-	vkCmdBindPipeline(m_handle, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandle());
 
+	vkCmdBindPipeline(m_handle, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->getHandle());
 }
 
 void CommandBuffer::updateViewport(uint32_t width, uint32_t height)
