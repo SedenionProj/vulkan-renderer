@@ -1,7 +1,7 @@
 #include "src/vulkan/framebuffer.hpp"
 #include "src/vulkan/device.hpp"
 
-Framebuffer::Framebuffer(const std::vector< std::shared_ptr<Texture2D>>& textures, std::shared_ptr<RenderPass> renderPass) {
+Framebuffer::Framebuffer(const std::vector< std::shared_ptr<Texture>>& textures, std::shared_ptr<RenderPass> renderPass) {
 
 	std::vector<VkImageView> attachments;
 	attachments.reserve(textures.size());

@@ -44,7 +44,6 @@ void computeTangentBitangent(
 Model::Model(std::filesystem::path filePath) {
 
 	tinyobj::ObjReaderConfig reader_config;
-	//reader_config.mtl_search_path = "assets/sponza"; // Path to material files
 
 	tinyobj::ObjReader reader;
 
@@ -141,6 +140,7 @@ Model::Model(std::filesystem::path filePath) {
 			const tinyobj::material_t* mp = &materials[shape.mesh.material_ids[0]];
 
 			if (!mp->diffuse_texname.empty()) {
+				// todo : texture loader helper function
 				material->m_properties.brightness = 1;
 				auto texPath = filePath.parent_path() / mp->diffuse_texname;
 

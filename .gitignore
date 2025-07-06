@@ -5,6 +5,7 @@
 
 out/
 models/
+skybox/
 *.spv
 
 # User-specific files

@@ -2,18 +2,17 @@
 
 #include "src/vulkan/swapchain.hpp"
 
-class Texture2D;
+class Texture;
 
 struct Attachment {
 	enum class Type {
 		NONE,
 		COLOR,
 		DEPTH,
-		PRESENT,
-		RESOLVE
+		PRESENT
 	};
 
-	std::shared_ptr<Texture2D> texture;
+	std::shared_ptr<Texture> texture;
 	Type type;
 	uint32_t binding;
 	bool resolve = false;
@@ -21,7 +20,7 @@ struct Attachment {
 
 class RenderPass {
 public:
-	RenderPass(std::initializer_list<Attachment> attachmentInfos);
+	RenderPass(std::initializer_list<Attachment> attachmentInfos, bool clear);
 	~RenderPass();
 
 	VkRenderPass getHandle() const { return m_handle; }

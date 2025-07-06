@@ -7,6 +7,7 @@ struct PipelineDesc {
 	std::shared_ptr<Shader> shader;
 	std::initializer_list<Attachment> attachmentInfos;
 	std::shared_ptr<Swapchain> swapchain = nullptr;
+	bool clear = true;
 	VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 };
 

@@ -9,6 +9,8 @@
 #include "src/window.hpp"
 #include "src/material.hpp"
 
+// todo : validation layers, destroy images, volk, framebuffer resize
+
 class Renderer {
 
 public:
@@ -21,6 +23,15 @@ private:
 
 	void initVulkan() {
 		m_window = std::make_shared<Window>();
+
+		PipelineDesc pipelineDesc{};
+
+		// UBO
+		m_transformUBO.reserve(MAX_FRAMES_IN_FLIGHT);
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			m_transformUBO.emplace_back((uint32_t)sizeof(UniformBufferObject));
+		}
+
 		// scene
 		m_sceneData.depthTexture = std::make_shared<Texture2D>(1280, 720, Device::get()->getPhysicalDevice().findDepthFormat(), VK_SAMPLE_COUNT_8_BIT);
 		m_sceneData.depthTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
@@ -42,10 +53,9 @@ private:
 		m_sceneData.resolveTexture->createSampler();
 
 		m_sceneData.model = std::make_shared<Model>("assets/models/sponza/sponza.obj");
-
-		PipelineDesc pipelineDesc{};
-		pipelineDesc.shader = m_sceneData.model->m_meshes[1]->m_material->m_shader;
+		pipelineDesc.shader = m_sceneData.model->m_meshes[1]->m_material->m_shader; // todo : asset manager
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
+		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = {
 			{ m_sceneData.colorTexture, Attachment::Type::COLOR, 0 },
 			{ m_sceneData.depthTexture, Attachment::Type::DEPTH, 1 },
@@ -54,29 +64,45 @@ private:
 
 		m_sceneData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
+		for (auto mesh : m_sceneData.model->m_meshes) {
+			if (mesh->m_material != nullptr) {
+				mesh->m_material->m_descriptorSet->setUniform(m_transformUBO, 0);
+			}
+		}
+
+		// cube map
+		const char* faces[6] = {
+			"skybox/right.jpg",
+			"skybox/left.jpg",
+			"skybox/top.jpg",
+			"skybox/bottom.jpg",
+			"skybox/front.jpg",
+			"skybox/back.jpg"
+		};
+		m_skyBoxData.cubeMap = std::make_shared<CubeMap>(faces);
+		pipelineDesc.shader = std::make_shared<Shader>("cubemapVert.spv", "cubemapFrag.spv");
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
+		pipelineDesc.clear = false;
+		pipelineDesc.attachmentInfos = {
+			{ m_sceneData.colorTexture, Attachment::Type::COLOR, 0 },
+			{ m_sceneData.depthTexture, Attachment::Type::DEPTH, 1 },
+			{ m_sceneData.resolveTexture, Attachment::Type::COLOR, 2, true} };
+
+		m_skyBoxData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
+		m_skyBoxData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+		m_skyBoxData.descriptorSet->setUniform(m_transformUBO, 0);
+		m_skyBoxData.descriptorSet->setTexture(m_skyBoxData.cubeMap, 1);
+
 		// post process
 		pipelineDesc.shader = std::make_shared<Shader>("postProcessVert.spv", "postProcessFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_window->getSwapchain()->m_swapchainTextures[0], Attachment::Type::PRESENT, 0 } };
 		pipelineDesc.swapchain = m_window->getSwapchain();
 
 		m_postProcessData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
 		m_postProcessData.descriptorSet->setTexture(m_sceneData.resolveTexture, 0);
 		m_postProcessData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
-
-
-		// UBO
-		m_transformUBO.reserve(MAX_FRAMES_IN_FLIGHT);
-		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			m_transformUBO.emplace_back((uint32_t)sizeof(UniformBufferObject));
-		}
-		
-
-		for (auto mesh : m_sceneData.model->m_meshes) {
-			if (mesh->m_material != nullptr) {
-				mesh->m_material->m_descriptorSet->setUniform(m_transformUBO, 0);
-			}
-		}
 	}
 	
 	void updateUniformBuffer(uint32_t currentImage) {
@@ -164,9 +190,8 @@ private:
 		commandBuffer->beginRecording();
 
 		// scene pass
-		commandBuffer->beginRenderpass(m_sceneData.pipeline->getRenderPass(), m_sceneData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->beginRenderpass(m_sceneData.pipeline->getRenderPass(), m_sceneData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720); // todo: static window ?
 		commandBuffer->bindPipeline(m_sceneData.pipeline);
-
 		commandBuffer->updateViewport(1280, 720);
 
 		for (auto mesh : m_sceneData.model->m_meshes) {
@@ -183,12 +208,23 @@ private:
 		}
 		commandBuffer->endRenderPass();
 		
+		// sky box
+		commandBuffer->beginRenderpass(m_skyBoxData.pipeline->getRenderPass(), m_skyBoxData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->bindPipeline(m_skyBoxData.pipeline);
+		commandBuffer->updateViewport(1280, 720);
+		VkDescriptorSet skyBoxDescriptorSet = m_skyBoxData.descriptorSet->getHandle(swapchain->getCurrentFrameIndex());
+		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_skyBoxData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &skyBoxDescriptorSet, 0, nullptr); // todo: abstract these
+
+		vkCmdDraw(commandBuffer->getHandle(), 36, 1, 0, 0);
+
+		commandBuffer->endRenderPass();
+
 		// post processing pass
 		commandBuffer->beginRenderpass(m_postProcessData.pipeline->getRenderPass(), m_postProcessData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_postProcessData.pipeline);
 		
 		VkDescriptorSet postProcessDescriptorSet = m_postProcessData.descriptorSet->getHandle(swapchain->getCurrentFrameIndex());
-		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_postProcessData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &postProcessDescriptorSet, 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_postProcessData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &postProcessDescriptorSet, 0, nullptr); // todo: abstract these
 
 		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
 
@@ -222,7 +258,6 @@ private:
 
 private:
 	std::shared_ptr<Window> m_window;
-
 	std::vector<UniformBuffer> m_transformUBO;
 
 	struct SceneData {
@@ -238,9 +273,16 @@ private:
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
 	};
+
+	struct SkyBoxData {
+		std::shared_ptr<CubeMap> cubeMap;
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<DescriptorSet> descriptorSet;
+	};
 	
 	PostProcessData m_postProcessData;
 	SceneData m_sceneData;
+	SkyBoxData m_skyBoxData;
 
 };
 

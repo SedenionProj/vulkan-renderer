@@ -2,7 +2,7 @@
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/texture.hpp"
 
-RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos) {
+RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool clear) {
 	std::vector<VkAttachmentDescription> attachmentDescriptions;
 	attachmentDescriptions.reserve(attachmentInfos.size());
 
@@ -13,19 +13,19 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos) {
 	bool resolve = false;
 
 	for (auto& attachmentInfo : attachmentInfos) {
-		// ref
 		VkAttachmentReference ref{};
 		ref.attachment = attachmentInfo.binding;
 
-		// desc
-		std::shared_ptr<Texture2D> tex = attachmentInfo.texture;
+		std::shared_ptr<Texture> tex = attachmentInfo.texture;
 		VkAttachmentDescription desc{};
 		desc.format = tex->getFormat();
 		desc.samples = tex->getSampleCount();
 		desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-		desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+
+
+
 		desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
 		if (attachmentInfo.type == Attachment::Type::COLOR) {
@@ -40,6 +40,14 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos) {
 		}
 		if (attachmentInfo.type == Attachment::Type::PRESENT) {
 			desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+		}
+
+		if (clear) {
+			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		}
+		else {
+			desc.initialLayout = desc.finalLayout;
+			desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		}
 
 		if (attachmentInfo.type == Attachment::Type::COLOR || attachmentInfo.type == Attachment::Type::PRESENT) {

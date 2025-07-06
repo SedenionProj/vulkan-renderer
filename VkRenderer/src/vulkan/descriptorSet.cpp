@@ -46,7 +46,7 @@ void DescriptorSet::createDescriptorSets() {
 	}
 }
 
-void DescriptorSet::update(std::vector<UniformBuffer>& uniformBuffers, std::shared_ptr<Texture2D> texture, uint32_t i) {
+void DescriptorSet::update(std::vector<UniformBuffer>& uniformBuffers, std::shared_ptr<Texture> texture, uint32_t i) {
 	
 		VkDescriptorBufferInfo bufferInfo{};
 		bufferInfo.buffer = uniformBuffers[i].getHandle();
@@ -89,8 +89,8 @@ void DescriptorSet::setUniform(std::vector<UniformBuffer>& uniformBuffers, uint3
 {
 	VkDescriptorBufferInfo info{};
 	info.buffer = uniformBuffers[frameIndex].getHandle();
-	info.offset = 0;
 	info.range = uniformBuffers[frameIndex].getSize();
+	info.offset = 0;
 
 	VkWriteDescriptorSet descriptorWrite{};
 	descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -102,13 +102,14 @@ void DescriptorSet::setUniform(std::vector<UniformBuffer>& uniformBuffers, uint3
 	vkUpdateDescriptorSets(Device::getHandle(), 1, &descriptorWrite, 0, nullptr);
 }
 
-void DescriptorSet::setTexture(std::shared_ptr<Texture2D> texture, uint32_t binding)
+void DescriptorSet::setTexture(std::shared_ptr<Texture> texture, uint32_t binding)
 {
 	for (int i = 0; i < m_descriptorSets.size(); i++) {
 		VkDescriptorImageInfo info{};
 		info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		info.imageView = texture->getImageView();
 		info.sampler = texture->getSampler();
+		
 
 		VkWriteDescriptorSet descriptorWrite{};
 		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

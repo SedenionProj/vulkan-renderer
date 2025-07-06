@@ -5,8 +5,188 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-Texture2D::Texture2D(VkImage image, VkImageView imageView, uint32_t width, uint32_t height, VkFormat format)
-	: m_image(image), m_imageView(imageView), m_width(width), m_height(height), m_format(format) {}
+
+void Texture::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) {
+	// todo; use vma
+	VkImageCreateInfo imageInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.extent.width = m_width;
+	imageInfo.extent.height = m_height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = m_mipLevels;
+	imageInfo.format = m_format;
+	imageInfo.tiling = tiling;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.usage = usage;
+	imageInfo.samples = m_sampleCount;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.arrayLayers = m_layerCount;
+	if (m_layerCount > 1) {
+		imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+	}
+
+	if (vkCreateImage(Device::getHandle(), &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create image!");
+	}
+
+	VkMemoryRequirements memRequirements;
+	vkGetImageMemoryRequirements(Device::getHandle(), m_image, &memRequirements);
+
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = Device::get()->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
+
+	if (vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
+		throw std::runtime_error("failed to allocate image memory!");
+	}
+
+	vkBindImageMemory(Device::getHandle(), m_image, m_imageMemory, 0);
+}
+
+void Texture::createImageView(VkImageAspectFlags aspectFlags) {
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = m_image;
+	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	viewInfo.format = m_format;
+	viewInfo.subresourceRange.aspectMask = aspectFlags;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = m_mipLevels;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = m_layerCount;
+	if (m_layerCount > 1) {
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+	}
+
+	if (vkCreateImageView(Device::getHandle(), &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create texture image view!");
+	}
+}
+
+void Texture::transitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout) {
+	CommandPool commandPool;
+	CommandBuffer commandBuffer(commandPool.getHandle());
+	commandBuffer.beginRecording();
+
+	VkPipelineStageFlags sourceStage;
+	VkPipelineStageFlags destinationStage;
+
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.oldLayout = oldLayout;
+	barrier.newLayout = newLayout;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = m_image;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = m_mipLevels;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = m_layerCount;
+	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+		barrier.srcAccessMask = 0;
+		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+	}
+	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+	}
+	else {
+		throw std::invalid_argument("unsupported layout transition!");
+	}
+
+	vkCmdPipelineBarrier(
+		commandBuffer.getHandle(),
+		sourceStage, destinationStage,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &barrier
+	);
+
+	commandBuffer.endRecording();
+	commandBuffer.submit(false);
+	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
+}
+
+void Texture::createSampler() {
+	VkPhysicalDeviceProperties properties{}; // todo : move inside physical device
+	vkGetPhysicalDeviceProperties(Device::get()->getPhysicalDevice().getHandle(), &properties);
+
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.anisotropyEnable = VK_TRUE;
+	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = static_cast<float>(m_mipLevels);
+
+	if (vkCreateSampler(Device::getHandle(), &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create texture sampler!");
+	}
+}
+
+void Texture::copyBufferToImage(VkBuffer buffer, uint32_t width, uint32_t height) {
+	CommandPool commandPool;
+	CommandBuffer commandBuffer(commandPool.getHandle());
+	commandBuffer.beginRecording();
+
+	VkBufferImageCopy region{};
+	region.bufferOffset = 0;
+	region.bufferRowLength = 0;
+	region.bufferImageHeight = 0;
+
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = m_layerCount;
+
+	region.imageOffset = { 0, 0, 0 };
+	region.imageExtent = {
+		width,
+		height,
+		1
+	};
+
+	vkCmdCopyBufferToImage(
+		commandBuffer.getHandle(),
+		buffer,
+		m_image,
+		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		1,
+		&region
+	);
+
+	commandBuffer.endRecording();
+	commandBuffer.submit(false);
+	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
+}
+
+Texture2D::Texture2D(VkImage image, VkImageView imageView, uint32_t width, uint32_t height, VkFormat format) {
+	m_width = width;
+	m_height = height;
+	m_image = image;
+	m_imageView = imageView;
+	m_format = format;
+}
 
 Texture2D::Texture2D(std::filesystem::path path) {
 	// load texture
@@ -53,8 +233,12 @@ Texture2D::Texture2D(std::filesystem::path path) {
 	generateMipmaps();
 }
 
-Texture2D::Texture2D(uint32_t width, uint32_t height, VkFormat format, VkSampleCountFlagBits sampleCount)
-	 : m_width(width), m_height(height), m_format(format), m_sampleCount(sampleCount) {}
+Texture2D::Texture2D(uint32_t width, uint32_t height, VkFormat format, VkSampleCountFlagBits sampleCount) {
+	m_width = width;
+	m_height = height;
+	m_format = format;
+	m_sampleCount = sampleCount;
+}
 
 Texture2D::~Texture2D()
 {
@@ -62,137 +246,6 @@ Texture2D::~Texture2D()
 	vkDestroyImageView(Device::getHandle(), m_imageView, nullptr);
 	vkDestroyImage(Device::getHandle(), m_image, nullptr);
 	vkFreeMemory(Device::getHandle(), m_imageMemory, nullptr);
-}
-
-void Texture2D::createImageView(VkImageAspectFlags aspectFlags) {
-	VkImageViewCreateInfo viewInfo{};
-	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-	viewInfo.image = m_image;
-	viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	viewInfo.format = m_format;
-	viewInfo.subresourceRange.aspectMask = aspectFlags;
-	viewInfo.subresourceRange.baseMipLevel = 0;
-	viewInfo.subresourceRange.levelCount = m_mipLevels;
-	viewInfo.subresourceRange.baseArrayLayer = 0;
-	viewInfo.subresourceRange.layerCount = 1;
-
-	if (vkCreateImageView(Device::getHandle(), &viewInfo, nullptr, &m_imageView) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create texture image view!");
-	}
-}
-
-void Texture2D::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties) {
-	VkImageCreateInfo imageInfo{};
-	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageInfo.imageType = VK_IMAGE_TYPE_2D;
-	imageInfo.extent.width = m_width;
-	imageInfo.extent.height = m_height;
-	imageInfo.extent.depth = 1;
-	imageInfo.mipLevels = m_mipLevels;
-	imageInfo.arrayLayers = 1;
-	imageInfo.format = m_format;
-	imageInfo.tiling = tiling;
-	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	imageInfo.usage = usage;
-	imageInfo.samples = m_sampleCount;
-	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-	if (vkCreateImage(Device::getHandle(), &imageInfo, nullptr, &m_image) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create image!");
-	}
-
-	VkMemoryRequirements memRequirements;
-	vkGetImageMemoryRequirements(Device::getHandle(), m_image, &memRequirements);
-
-	VkMemoryAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-	allocInfo.allocationSize = memRequirements.size;
-	allocInfo.memoryTypeIndex = Device::get()->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
-
-	if (vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &m_imageMemory) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate image memory!");
-	}
-
-	vkBindImageMemory(Device::getHandle(), m_image, m_imageMemory, 0);
-}
-
-void Texture2D::createSampler() {
-	VkPhysicalDeviceProperties properties{}; // todo : move inside physical device
-	vkGetPhysicalDeviceProperties(Device::get()->getPhysicalDevice().getHandle(), &properties);
-
-	VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.anisotropyEnable = VK_TRUE;
-	samplerInfo.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
-	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-	samplerInfo.unnormalizedCoordinates = VK_FALSE;
-	samplerInfo.compareEnable = VK_FALSE;
-	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.0f;
-	samplerInfo.minLod = 0.0f;
-	samplerInfo.maxLod = static_cast<float>(m_mipLevels);
-
-	if (vkCreateSampler(Device::getHandle(), &samplerInfo, nullptr, &m_sampler) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create texture sampler!");
-	}
-}
-
-void Texture2D::transitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout) {
-	CommandPool commandPool;
-	CommandBuffer commandBuffer(commandPool.getHandle());
-	commandBuffer.beginRecording();
-
-	VkPipelineStageFlags sourceStage;
-	VkPipelineStageFlags destinationStage;
-
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.oldLayout = oldLayout;
-	barrier.newLayout = newLayout;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = m_image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = m_mipLevels;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-		barrier.srcAccessMask = 0;
-		barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-		destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-	}
-	else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-		barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-		sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-		destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-	}
-	else {
-		throw std::invalid_argument("unsupported layout transition!");
-	}
-
-	vkCmdPipelineBarrier(
-		commandBuffer.getHandle(),
-		sourceStage, destinationStage,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
-	);
-
-	commandBuffer.endRecording();
-	commandBuffer.submit(false);
-	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
 }
 
 void Texture2D::generateMipmaps() {
@@ -278,38 +331,51 @@ void Texture2D::generateMipmaps() {
 	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
 }
 
-void Texture2D::copyBufferToImage(VkBuffer buffer, uint32_t width, uint32_t height) {
-	CommandPool commandPool;
-	CommandBuffer commandBuffer(commandPool.getHandle());
-	commandBuffer.beginRecording();
+#define ASSETS_PATH "../../../VkRenderer/assets/" // todo : asset manager
 
-	VkBufferImageCopy region{};
-	region.bufferOffset = 0;
-	region.bufferRowLength = 0;
-	region.bufferImageHeight = 0;
+CubeMap::CubeMap(const char** paths) {
+	stbi_uc* textureData[6];
 
-	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	region.imageSubresource.mipLevel = 0;
-	region.imageSubresource.baseArrayLayer = 0;
-	region.imageSubresource.layerCount = 1;
+	for (int i = 0; i < 6; i++) {
+		int width, height, texChannels;
 
-	region.imageOffset = { 0, 0, 0 };
-	region.imageExtent = {
-		width,
-		height,
-		1
-	};
+		std::string fullPath = std::string(ASSETS_PATH) + paths[i];
+		stbi_uc* pixels = stbi_load(fullPath.c_str(), &width, &height, &texChannels, STBI_rgb_alpha);
+		
+		if (!pixels) {
+			throw std::runtime_error("failed to load texture image!");
+		}
 
-	vkCmdCopyBufferToImage(
-		commandBuffer.getHandle(),
-		buffer,
-		m_image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		1,
-		&region
-	);
+		textureData[i] = pixels;
 
-	commandBuffer.endRecording();
-	commandBuffer.submit(false);
-	vkQueueWaitIdle(Device::get()->getGraphicsQueue()); // temp
+		m_width = static_cast<uint32_t>(width);
+		m_height = static_cast<uint32_t>(height);
+	}
+	m_layerCount = 6;
+	m_format = VK_FORMAT_R8G8B8A8_SRGB;
+
+	VkDeviceSize layerSize = m_width * m_height * 4;
+	VkDeviceSize imageSize = layerSize * m_layerCount;
+
+	Buffer stagingBuffer;
+	stagingBuffer.createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+	void* data;
+	vkMapMemory(Device::getHandle(), stagingBuffer.getMemory(), 0, imageSize, 0, &data);
+	for (int i = 0; i < 6; i++)
+		memcpy(static_cast<uint8_t*>(data) + (layerSize * i), textureData[i], static_cast<size_t>(layerSize));
+	vkUnmapMemory(Device::getHandle(), stagingBuffer.getMemory());
+
+	for (int i = 0; i < 6; i++)
+		stbi_image_free(textureData[i]);
+
+	createImage(VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	transitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	copyBufferToImage(stagingBuffer.getHandle(), m_width, m_height);
+	transitionImageLayout(VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+
+	createSampler();
 }

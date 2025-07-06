@@ -2,16 +2,16 @@
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/framebuffer.hpp"
 
-Pipeline::Pipeline(PipelineDesc info)
+Pipeline::Pipeline(PipelineDesc info) // todo : rename desc
 	: m_shader(info.shader) {
 	m_pipelineLayout = m_shader->getPipelineLayout();
 
-	m_renderPass = std::make_shared<RenderPass>(info.attachmentInfos);
+	m_renderPass = std::make_shared<RenderPass>(info.attachmentInfos, info.clear);
 
 	VkSampleCountFlagBits sampleCount = info.sampleCount;
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		std::vector<std::shared_ptr<Texture2D>> textures;
+		std::vector<std::shared_ptr<Texture>> textures;
 
 		for (auto& attachmentInfo : info.attachmentInfos) {
 			if (attachmentInfo.type == Attachment::Type::PRESENT && info.swapchain != nullptr) {
@@ -109,7 +109,7 @@ Pipeline::Pipeline(PipelineDesc info)
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
 	depthStencil.depthTestEnable = VK_TRUE;
 	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.minDepthBounds = 0.0f; // Optional
 	depthStencil.maxDepthBounds = 1.0f; // Optional
