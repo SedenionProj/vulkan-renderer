@@ -1,8 +1,12 @@
 #include "src/vulkan/pipeline.hpp"
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/framebuffer.hpp"
+#include "src/vulkan/shader.hpp"
+#include "src/vulkan/renderPass.hpp"
+#include "src/vulkan/swapchain.hpp"
+#include "src/vulkan/Texture.hpp"
 
-Pipeline::Pipeline(PipelineDesc info) // todo : rename desc
+Pipeline::Pipeline(PipelineDesc info)
 	: m_shader(info.shader) {
 	m_pipelineLayout = m_shader->getPipelineLayout();
 
@@ -14,12 +18,11 @@ Pipeline::Pipeline(PipelineDesc info) // todo : rename desc
 		std::vector<std::shared_ptr<Texture>> textures;
 
 		for (auto& attachmentInfo : info.attachmentInfos) {
-			if (attachmentInfo.type == Attachment::Type::PRESENT && info.swapchain != nullptr) {
+			if (attachmentInfo.texture->getType() == TextureType::SWAPCHAIN && info.swapchain != nullptr) {
 				textures.emplace_back(info.swapchain->m_swapchainTextures[i]);
 			} else {
 				textures.emplace_back(attachmentInfo.texture);
 			}
-
 		}
 
 		m_framebuffers.emplace_back(std::make_shared<Framebuffer>(
@@ -75,7 +78,7 @@ Pipeline::Pipeline(PipelineDesc info) // todo : rename desc
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
 	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 	rasterizer.lineWidth = 1.0f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; //VK_CULL_MODE_NONE
 	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -132,12 +135,9 @@ Pipeline::Pipeline(PipelineDesc info) // todo : rename desc
 	pipelineInfo.layout = m_pipelineLayout;
 	pipelineInfo.renderPass = m_renderPass->getHandle();
 	pipelineInfo.subpass = 0;
-	if (vkCreateGraphicsPipelines(Device::getHandle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_handle) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create graphics pipeline!");
-	}
+	VK_CKECK(vkCreateGraphicsPipelines(Device::getHandle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_handle));
 
-	//vkDestroyShaderModule(Device::getHandle(), fragShaderModule, nullptr);	// todo
-	//vkDestroyShaderModule(Device::getHandle(), vertShaderModule, nullptr);
+	//m_shader->destroy();
 }
 
 Pipeline::~Pipeline() {

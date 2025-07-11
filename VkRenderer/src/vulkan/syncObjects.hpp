@@ -1,13 +1,12 @@
 #pragma once
-#define GLFW_INCLUDE_VULKAN
+#include "src/vulkan/vkHeader.hpp"
 
-#include <GLFW/glfw3.h>
 class Semaphore {
 public:
 	Semaphore();
 	~Semaphore();
 
-	VkSemaphore getHandle() { return m_handle; }
+	VkSemaphore getHandle() const { return m_handle; }
 
 private:
 	VkSemaphore m_handle;
@@ -18,9 +17,9 @@ public:
 	Fence();
 	~Fence();
 
-	VkFence getHandle() { return m_handle; }
+	VkFence getHandle() const { return m_handle; }
 
-	bool isSignaled() { return m_signaled; }
+	bool isSignaled() const { return m_signaled; }
 
 	void wait();
 	void reset();
@@ -28,5 +27,5 @@ public:
 private:
 	VkFence m_handle;
 
-	bool m_signaled= true;
+	bool m_signaled = true;
 };

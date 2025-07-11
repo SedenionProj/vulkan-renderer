@@ -2,8 +2,9 @@
 #include "src/vulkan/context.hpp"
 #include "src/vulkan/swapchain.hpp"
 
-Window::Window()
-{
+#include <GLFW/glfw3.h>
+
+Window::Window() {
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -31,9 +32,9 @@ Window::Window()
 	m_swapchain = std::make_shared<Swapchain>(*this);
 }
 
-Window::~Window()
-{
+Window::~Window() {
+	m_swapchain.reset();
+	delete Context::get();
 	glfwDestroyWindow(m_handle);
-
 	glfwTerminate();
 }

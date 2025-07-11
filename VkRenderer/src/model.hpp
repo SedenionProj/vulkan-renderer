@@ -1,6 +1,6 @@
 #pragma once
 
-#include "src/vulkan/buffer.hpp"
+#include "src/vulkan/vkHeader.hpp"
 
 struct Vertex {
 	glm::vec3 pos;
@@ -13,10 +13,6 @@ struct Vertex {
 		return pos == other.pos && texCoord == other.texCoord && normal == other.normal;
 	}
 };
-
-class VertexBuffer;
-class IndexBuffer;
-class Material;
 
 class Mesh {
 public:

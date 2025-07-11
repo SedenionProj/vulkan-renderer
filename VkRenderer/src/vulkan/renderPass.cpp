@@ -11,46 +11,48 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool c
 	VkAttachmentReference colorAttachmentResolveRef;
 
 	bool resolve = false;
+	uint32_t binding = 0;
 
 	for (auto& attachmentInfo : attachmentInfos) {
 		VkAttachmentReference ref{};
-		ref.attachment = attachmentInfo.binding;
+		ref.attachment = binding;
+		binding++;
 
 		std::shared_ptr<Texture> tex = attachmentInfo.texture;
 		VkAttachmentDescription desc{};
 		desc.format = tex->getFormat();
 		desc.samples = tex->getSampleCount();
+		desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 		desc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 		desc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-		desc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-
-
-		desc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-
-		if (attachmentInfo.type == Attachment::Type::COLOR) {
+		switch (tex->getType()) {
+		case TextureType::COLOR:
 			desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL; // todo
-		}
-		if (attachmentInfo.type == Attachment::Type::DEPTH) {
-			desc.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-			desc.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
+			break;
+		case TextureType::DEPTH:
+			desc.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 			depthAttachmentRef.push_back(ref);
-		}
-		if (attachmentInfo.type == Attachment::Type::PRESENT) {
+			break;
+		case TextureType::SWAPCHAIN:
 			desc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+			break;
 		}
 
 		if (clear) {
+			if (tex->getType() == TextureType::DEPTH)
+				m_clearValues.push_back({ 1.,0.});
+			else
+				m_clearValues.push_back({ 0.1,0.1,0.1,0.1 });
 			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		}
-		else {
+		} else {
 			desc.initialLayout = desc.finalLayout;
 			desc.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		}
 
-		if (attachmentInfo.type == Attachment::Type::COLOR || attachmentInfo.type == Attachment::Type::PRESENT) {
+		if (tex->getType() == TextureType::COLOR || tex->getType() == TextureType::SWAPCHAIN) {
 			ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 			if (attachmentInfo.resolve) {
 				colorAttachmentResolveRef = ref;
@@ -60,7 +62,6 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool c
 			}
 				
 		}
-
 		attachmentDescriptions.emplace_back(desc);
 	}
 
@@ -89,9 +90,7 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool c
 	//renderPassInfo.dependencyCount = 1;
 	//renderPassInfo.pDependencies = &dependency;
 
-	if (vkCreateRenderPass(Device::getHandle(), &renderPassInfo, nullptr, &m_handle) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create render pass");
-	}
+	VK_CKECK(vkCreateRenderPass(Device::getHandle(), &renderPassInfo, nullptr, &m_handle));
 }
 
 RenderPass::~RenderPass() {

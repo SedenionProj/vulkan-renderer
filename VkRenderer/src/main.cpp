@@ -1,3 +1,4 @@
+#include "src/vulkan/vkHeader.hpp"
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/swapchain.hpp"
 #include "src/vulkan/renderPass.hpp"
@@ -5,12 +6,14 @@
 #include "src/vulkan/framebuffer.hpp"
 #include "src/vulkan/commandBuffer.hpp"
 #include "src/vulkan/descriptorSet.hpp"
+#include "src/vulkan/texture.hpp"
+#include "src/vulkan/syncObjects.hpp"
+#include "src/vulkan/shader.hpp"
 #include "src/model.hpp"
 #include "src/window.hpp"
 #include "src/material.hpp"
-
-// todo : validation layers, destroy images, volk, framebuffer resize
-
+#include "GLFW/glfw3.h"
+// todo : framebuffer resize
 class Renderer {
 
 public:
@@ -32,34 +35,65 @@ private:
 			m_transformUBO.emplace_back((uint32_t)sizeof(UniformBufferObject));
 		}
 
-		// scene
-		m_sceneData.depthTexture = std::make_shared<Texture2D>(1280, 720, Device::get()->getPhysicalDevice().findDepthFormat(), VK_SAMPLE_COUNT_8_BIT);
-		m_sceneData.depthTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		m_sceneData.depthTexture->createImageView(VK_IMAGE_ASPECT_DEPTH_BIT);
+		// shadow
+		float orthoSize = 30.0f;
+		float nearPlane = 1.0f;
+		float farPlane = 35.0f;
 
-		m_sceneData.colorTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_8_BIT);
+		m_shadowData.lightProjection = glm::ortho(
+			-orthoSize, orthoSize,
+			-orthoSize, orthoSize,
+			nearPlane, farPlane
+		);
+
+		glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.0f));
+		glm::vec3 lightPos = -lightDir * 25.0f;
+		m_shadowData.lightPos = lightPos;
+		
+		m_shadowData.lightView = glm::lookAt(
+			lightPos,
+			glm::vec3(0.0f),
+			glm::vec3(0.0f, 1.0f, 0.0f)
+		);
+		m_shadowData.lightSpace = m_shadowData.lightProjection * m_shadowData.lightView;
+
+		m_shadowData.texture = std::make_shared<DepthTexture>(m_shadowData.resolution, m_shadowData.resolution);
+		m_shadowData.texture->createSampler();
+
+		pipelineDesc.shader = std::make_shared<Shader>("shadowMapVert.spv", "shadowMapFrag.spv");
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+		pipelineDesc.clear = true;
+		pipelineDesc.attachmentInfos = { { m_shadowData.texture } };
+		pipelineDesc.swapchain = nullptr;
+
+		m_shadowData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
+
+		m_shadowData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+		m_shadowData.descriptorSet->setUniform(m_transformUBO, 0);
+		// scene
+		m_sceneData.depthTexture = std::make_shared<DepthTexture>(1280, 720, VK_SAMPLE_COUNT_8_BIT);
+
+		m_sceneData.colorTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_8_BIT);
 		m_sceneData.colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		m_sceneData.colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 
-		m_sceneData.resolveTexture = std::make_shared<Texture2D>(1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
+		m_sceneData.resolveTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
 		m_sceneData.resolveTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		m_sceneData.resolveTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 		m_sceneData.resolveTexture->createSampler();
 
-		m_sceneData.model = std::make_shared<Model>("assets/models/sponza/sponza.obj");
+		m_sceneData.model = std::make_shared<Model>("models/sponza/sponza.obj");
 		pipelineDesc.shader = m_sceneData.model->m_meshes[1]->m_material->m_shader; // todo : asset manager
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = {
-			{ m_sceneData.colorTexture, Attachment::Type::COLOR, 0 },
-			{ m_sceneData.depthTexture, Attachment::Type::DEPTH, 1 },
-			{ m_sceneData.resolveTexture, Attachment::Type::COLOR, 2, true} };
+			{ m_sceneData.colorTexture},
+			{ m_sceneData.depthTexture},
+			{ m_sceneData.resolveTexture, true} };
 
 
 		m_sceneData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
@@ -67,6 +101,7 @@ private:
 		for (auto mesh : m_sceneData.model->m_meshes) {
 			if (mesh->m_material != nullptr) {
 				mesh->m_material->m_descriptorSet->setUniform(m_transformUBO, 0);
+				mesh->m_material->m_descriptorSet->setTexture(m_shadowData.texture, 5);
 			}
 		}
 
@@ -84,9 +119,9 @@ private:
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
 		pipelineDesc.clear = false;
 		pipelineDesc.attachmentInfos = {
-			{ m_sceneData.colorTexture, Attachment::Type::COLOR, 0 },
-			{ m_sceneData.depthTexture, Attachment::Type::DEPTH, 1 },
-			{ m_sceneData.resolveTexture, Attachment::Type::COLOR, 2, true} };
+			{ m_sceneData.colorTexture},
+			{ m_sceneData.depthTexture},
+			{ m_sceneData.resolveTexture, true} };
 
 		m_skyBoxData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 		m_skyBoxData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
@@ -97,7 +132,7 @@ private:
 		pipelineDesc.shader = std::make_shared<Shader>("postProcessVert.spv", "postProcessFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
-		pipelineDesc.attachmentInfos = { { m_window->getSwapchain()->m_swapchainTextures[0], Attachment::Type::PRESENT, 0 } };
+		pipelineDesc.attachmentInfos = { { m_window->getSwapchain()->m_swapchainTextures[0] } };
 		pipelineDesc.swapchain = m_window->getSwapchain();
 
 		m_postProcessData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
@@ -112,13 +147,12 @@ private:
 		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 		// Static camera state
-		static glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 5.0f);
-		static float yaw = -90.0f;  // Facing forward
+		static glm::vec3 cameraPos = glm::vec3(0.0f, 10.0f, 0.0f);
+		static float yaw = -90.0f; 
 		static float pitch = 0.0f;
-		static float speed = 100.0f;
+		static float speed = 1.0f;
 		static float sensitivity = 0.5f;
 
-		// Handle mouse movement
 		static double lastX = 640.0, lastY = 360.0;
 		static bool firstMouse = true;
 		double xpos, ypos;
@@ -131,7 +165,7 @@ private:
 		}
 
 		float xoffset = xpos - lastX;
-		float yoffset = lastY - ypos; // reversed since y-coordinates go from top to bottom
+		float yoffset = lastY - ypos;
 
 		lastX = xpos;
 		lastY = ypos;
@@ -142,22 +176,18 @@ private:
 		yaw += xoffset;
 		pitch += yoffset;
 
-		// Clamp pitch to avoid flipping
 		pitch = std::clamp(pitch, -89.0f, 89.0f);
 
-		// Calculate front vector
 		glm::vec3 front;
 		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
 		front.y = sin(glm::radians(pitch));
 		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
 		front = glm::normalize(front);
 
-		// Calculate right and up vectors
 		glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
 		glm::vec3 up = glm::normalize(glm::cross(right, front));
 
-		// Handle keyboard input
-		float deltaTime = 0.016f; // You should actually compute frame time
+		float deltaTime = 0.016f;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_W) == GLFW_PRESS) cameraPos += front * speed * deltaTime;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_S) == GLFW_PRESS) cameraPos -= front * speed * deltaTime;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_A) == GLFW_PRESS) cameraPos -= right * speed * deltaTime;
@@ -165,20 +195,19 @@ private:
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_SPACE) == GLFW_PRESS) cameraPos += up * speed * deltaTime;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) cameraPos -= up * speed * deltaTime;
 
-		// Send data to shader
 		UniformBufferObject ubo{};
-		ubo.model = glm::mat4(1.0f);
+		ubo.model = glm::mat4(1.f);
+		ubo.model = glm::scale(ubo.model, glm::vec3(0.01f));
 		ubo.view = glm::lookAt(cameraPos, cameraPos + front, up);
-		ubo.proj = glm::perspective(glm::radians(90.0f), 1280.0f / 720.0f, 0.1f, 5000.0f);
+		ubo.proj = glm::perspective(glm::radians(90.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
 		ubo.proj[1][1] *= -1;
 		ubo.camPos = glm::vec4(cameraPos,1);
+		ubo.lightSpace = m_shadowData.lightSpace;
 
 		m_transformUBO[currentImage].setData(&ubo, sizeof(ubo));
-
 	}
 
 	void drawFrame() {
-		
 		auto swapchain = m_window->getSwapchain();
 		auto commandBuffer = swapchain->getCurrentCommandBuffer();
 		updateUniformBuffer(swapchain->getCurrentFrameIndex());
@@ -189,8 +218,28 @@ private:
 		commandBuffer->reset();
 		commandBuffer->beginRecording();
 
+		// shadow pass
+		commandBuffer->beginRenderpass(m_shadowData.pipeline->getRenderPass(), m_shadowData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], m_shadowData.resolution, m_shadowData.resolution);
+		commandBuffer->bindPipeline(m_shadowData.pipeline);
+		commandBuffer->updateViewport(m_shadowData.resolution, m_shadowData.resolution);
+
+		for (auto mesh : m_sceneData.model->m_meshes) {
+			if (mesh->m_material == nullptr)
+				continue;
+
+			VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
+			VkDeviceSize offsets[] = { 0 };
+			VkDescriptorSet descriptorSets[] = { m_shadowData.descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
+			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
+			vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
+			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+		}
+
+		commandBuffer->endRenderPass();
+
 		// scene pass
-		commandBuffer->beginRenderpass(m_sceneData.pipeline->getRenderPass(), m_sceneData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720); // todo: static window ?
+		commandBuffer->beginRenderpass(m_sceneData.pipeline->getRenderPass(), m_sceneData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_sceneData.pipeline);
 		commandBuffer->updateViewport(1280, 720);
 
@@ -206,6 +255,7 @@ private:
 			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
 			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
 		}
+
 		commandBuffer->endRenderPass();
 		
 		// sky box
@@ -253,6 +303,7 @@ private:
 		glm::mat4 model;
 		glm::mat4 view;
 		glm::mat4 proj;
+		glm::mat4 lightSpace;
 		glm::vec4 camPos;
 	};
 
@@ -266,7 +317,6 @@ private:
 		std::shared_ptr<Texture2D> colorTexture;
 		std::shared_ptr<Texture2D> resolveTexture;
 		std::shared_ptr<Texture2D> depthTexture;
-		
 	};
 
 	struct PostProcessData {
@@ -279,17 +329,28 @@ private:
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
 	};
+	struct ShadowData {
+		std::shared_ptr<Texture2D> texture;
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<DescriptorSet> descriptorSet;
+		uint32_t resolution = 4096;
+		glm::vec3 lightPos = glm::vec3(50, 50.0f, .0f);
+		glm::mat4 lightSpace;
+		glm::mat4 lightProjection;
+		glm::mat4 lightView;
+	};
 	
 	PostProcessData m_postProcessData;
 	SceneData m_sceneData;
 	SkyBoxData m_skyBoxData;
-
+	ShadowData m_shadowData;
 };
 
 int main() {
-	Renderer app;
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 
 	try {
+		Renderer app;
 		app.run();
 	}
 	catch (const std::exception& e) {
@@ -297,5 +358,6 @@ int main() {
 		return EXIT_FAILURE;
 	}
 
+	_CrtDumpMemoryLeaks();
 	return EXIT_SUCCESS;
 }

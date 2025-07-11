@@ -1,11 +1,5 @@
 #pragma once
-
-#include "src/vulkan/pipeline.hpp"
-#include "src/vulkan/syncObjects.hpp"
-
-class Semaphore;
-class Framebuffer;
-class renderPass;
+#include "src/vulkan/vkHeader.hpp"
 
 class CommandPool {
 public:

@@ -2,6 +2,8 @@
 #include "src/vulkan/syncObjects.hpp"
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/framebuffer.hpp"
+#include "src/vulkan/pipeline.hpp"
+#include "src/vulkan/renderPass.hpp"
 
 CommandPool::CommandPool() {
 	auto& pDevice = Device::get()->getPhysicalDevice();
@@ -11,9 +13,7 @@ CommandPool::CommandPool() {
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-	if (vkCreateCommandPool(Device::getHandle(), &poolInfo, nullptr, &m_handle) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create command pool!");
-	}
+	VK_CKECK(vkCreateCommandPool(Device::getHandle(), &poolInfo, nullptr, &m_handle));
 }
 
 CommandPool::~CommandPool() {
@@ -28,9 +28,7 @@ CommandBuffer::CommandBuffer(VkCommandPool commandPool)
 	allocInfo.commandPool = m_commandPool;
 	allocInfo.commandBufferCount = 1;
 
-	if (vkAllocateCommandBuffers(Device::getHandle(), &allocInfo, &m_handle) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate command buffers");
-	}
+	VK_CKECK(vkAllocateCommandBuffers(Device::getHandle(), &allocInfo, &m_handle));
 
 	m_imageAvailableSemaphores = std::make_unique<Semaphore>();
 	m_renderFinishedSemaphores = std::make_unique<Semaphore>();
@@ -46,19 +44,14 @@ void CommandBuffer::beginRecording() {
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-	if (vkBeginCommandBuffer(m_handle, &beginInfo) != VK_SUCCESS) {
-		throw std::runtime_error("failed to begin recording command buffer");
-	}
+	VK_CKECK(vkBeginCommandBuffer(m_handle, &beginInfo));
 }
 
 void CommandBuffer::beginRenderpass(std::shared_ptr<RenderPass> renderPass, std::shared_ptr<Framebuffer> framebuffer, uint32_t width, uint32_t height)
 {
 	m_renderPass = renderPass;
-	std::array<VkClearValue, 3> clearValues{};
-	clearValues[0].color = { {0.01f, 0.01f, 0.01f, 1.0f} };
-	clearValues[1].depthStencil = { 1.0f, 0 };
-	clearValues[2].color = { {0.01f, 0.01f, 0.01f, 1.0f} };
-
+	
+	auto& clearValues = renderPass->getClearValues();
 
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -75,9 +68,7 @@ void CommandBuffer::beginRenderpass(std::shared_ptr<RenderPass> renderPass, std:
 
 void CommandBuffer::endRecording()
 {
-	if (vkEndCommandBuffer(m_handle) != VK_SUCCESS) {
-		throw std::runtime_error("failed to record command buffer");
-	}
+	VK_CKECK(vkEndCommandBuffer(m_handle));
 }
 
 void CommandBuffer::endRenderPass()
@@ -113,9 +104,7 @@ void CommandBuffer::submit(bool semaphores)
 
 	m_fence->reset();
 
-	if (vkQueueSubmit(Device::get()->getGraphicsQueue(), 1, &submitInfo, m_fence->getHandle()) != VK_SUCCESS) {
-		throw std::runtime_error("failed to submit draw command buffer!");
-	}
+	VK_CKECK(vkQueueSubmit(Device::get()->getGraphicsQueue(), 1, &submitInfo, m_fence->getHandle()));
 }
 
 void CommandBuffer::bindPipeline(std::shared_ptr<Pipeline> pipeline)

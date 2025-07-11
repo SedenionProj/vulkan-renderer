@@ -1,5 +1,7 @@
 #include "src/vulkan/framebuffer.hpp"
 #include "src/vulkan/device.hpp"
+#include "src/vulkan/texture.hpp"
+#include "src/vulkan/renderPass.hpp"
 
 Framebuffer::Framebuffer(const std::vector< std::shared_ptr<Texture>>& textures, std::shared_ptr<RenderPass> renderPass) {
 
@@ -18,9 +20,7 @@ Framebuffer::Framebuffer(const std::vector< std::shared_ptr<Texture>>& textures,
 	framebufferInfo.height = textures.back()->getHeight();
 	framebufferInfo.layers = 1;
 
-	if (vkCreateFramebuffer(Device::getHandle(), &framebufferInfo, nullptr, &m_handle) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create framebuffer!");
-	}
+	VK_CKECK(vkCreateFramebuffer(Device::getHandle(), &framebufferInfo, nullptr, &m_handle));
 }
 
 Framebuffer::~Framebuffer() {

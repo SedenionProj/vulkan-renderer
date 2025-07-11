@@ -1,16 +1,5 @@
 #pragma once
-
-#define MAX_FRAMES_IN_FLIGHT 2
-
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
-class Texture2D;
-class Window;
-class Context;
-class Device;
-class CommandBuffer;
-class CommandPool;
+#include "src/vulkan/vkHeader.hpp"
 
 struct SwapchainSupportDetails {
 	VkSurfaceCapabilitiesKHR capabilities;

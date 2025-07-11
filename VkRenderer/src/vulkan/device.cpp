@@ -12,9 +12,7 @@ PhysicalDevice::~PhysicalDevice() {
 void PhysicalDevice::pickPhysicalDevice() {
 	uint32_t deviceCount = 0;
 	vkEnumeratePhysicalDevices(Context::get()->getInstance(), &deviceCount, nullptr);
-	if (deviceCount == 0) {
-		throw std::runtime_error("failed to find GPUs with Vulkan support");
-	}
+	DEBUG_ASSERT(deviceCount != 0, "failed to find GPUs with Vulkan support");
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(Context::get()->getInstance(), &deviceCount, devices.data());
 
@@ -25,10 +23,7 @@ void PhysicalDevice::pickPhysicalDevice() {
 		}
 	}
 
-	if (m_physicalDevice == VK_NULL_HANDLE) {
-		throw std::runtime_error("failed to find a suitable GPU");
-	}
-
+	DEBUG_ASSERT(m_physicalDevice, "failed to find a suitable GPU");
 }
 
 bool PhysicalDevice::isDeviceSuitable(VkPhysicalDevice device) {
@@ -52,7 +47,7 @@ uint32_t PhysicalDevice::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFla
 		}
 	}
 
-	throw std::runtime_error("failed to find suitable memory type!");
+	DEBUG_ERROR("failed to find suitable memory type");
 }
 
 QueueFamilyIndices PhysicalDevice::findQueueFamilies(VkPhysicalDevice device) {
@@ -119,7 +114,7 @@ VkFormat PhysicalDevice::findSupportedFormat(const std::vector<VkFormat>& candid
 		}
 	}
 
-	throw std::runtime_error("failed to find supported format!");
+	DEBUG_ERROR("failed to find supported format!");
 }
 
 
@@ -161,9 +156,9 @@ void Device::createDevice() {
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(m_physicalDevice.m_deviceExtensions.size());
 	createInfo.ppEnabledExtensionNames = m_physicalDevice.m_deviceExtensions.data();
 
-	if (vkCreateDevice(m_physicalDevice.getHandle(), &createInfo, nullptr, &m_handle) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create logical device");
-	}
+	VK_CKECK(vkCreateDevice(m_physicalDevice.getHandle(), &createInfo, nullptr, &m_handle));
+
+	volkLoadDevice(m_handle);
 
 	vkGetDeviceQueue(m_handle, indices.graphicsFamily.value(), 0, &m_graphicsQueue);
 	vkGetDeviceQueue(m_handle, indices.presentFamily.value(), 0, &m_presentQueue);

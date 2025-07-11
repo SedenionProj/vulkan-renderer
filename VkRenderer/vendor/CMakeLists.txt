@@ -17,4 +17,9 @@ set(TINYOBJECTLOADER_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/tinyobjloader PARENT_SC
 set(SPIRV_CROSS_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/spirv-cross PARENT_SCOPE)
 add_subdirectory(spirv-cross)
 
-#target_link_libraries(VkRenderer spirv-cross-c-shared)
+# volk
+#set(VOLK_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/volk PARENT_SCOPE)
+if (WIN32)
+   set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_WIN32_KHR)
+endif()
+add_subdirectory(volk)

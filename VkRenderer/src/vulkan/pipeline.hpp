@@ -1,7 +1,6 @@
 #pragma once
-#include "src/vulkan/renderPass.hpp"
-#include "src/vulkan/shader.hpp"
-#include "src/vulkan/framebuffer.hpp"
+#include "src/vulkan/vkHeader.hpp"
+#include "renderPass.hpp"
 
 struct PipelineDesc {
 	std::shared_ptr<Shader> shader;
@@ -16,8 +15,8 @@ public:
 	Pipeline(PipelineDesc info);
 	~Pipeline();
 	
-	VkPipeline getHandle() { return m_handle; }
-	std::shared_ptr<RenderPass> getRenderPass() { return m_renderPass; }
+	VkPipeline getHandle() const { return m_handle; }
+	std::shared_ptr<RenderPass> getRenderPass() const { return m_renderPass; }
 	std::vector<std::shared_ptr<Framebuffer>>& getFramebuffers() { return m_framebuffers; }
 private:
 

@@ -1,8 +1,5 @@
 #pragma once
-
-#include "vulkan/vulkan.h"
-
-class Device;
+#include "src/vulkan/vkHeader.hpp"
 
 class Buffer {
 public:

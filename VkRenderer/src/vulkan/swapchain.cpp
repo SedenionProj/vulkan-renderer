@@ -3,40 +3,29 @@
 #include "src/vulkan/texture.hpp"
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/commandBuffer.hpp"
+#include "src/vulkan/syncObjects.hpp"
+
+#include <GLFW/glfw3.h>
 
 Swapchain::Swapchain(Window& window)
 	:  m_window(window) {
-	if (glfwCreateWindowSurface(Context::get()->getInstance(), window.getHandle(), nullptr, &m_surface) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create window surface");
-	}
+	VK_CKECK(glfwCreateWindowSurface(Context::get()->getInstance(), window.getHandle(), nullptr, &m_surface));
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		m_frameData[i].commandPool = std::make_shared<CommandPool>();
 		m_frameData[i].commandBuffer = std::make_shared<CommandBuffer>(m_frameData[i].commandPool->getHandle());
 	}
-	//VkBool32 presentSupport = false;
+	//VkBool32 presentSupport = false; // todo
 	//vkGetPhysicalDeviceSurfaceSupportKHR(device->getPhysicalDevice().get(), i, m_surface, &presentSupport);
 	createSwapchain();
 }
 
-Swapchain::~Swapchain()
-{
+Swapchain::~Swapchain() {
 	vkDestroySwapchainKHR(Device::getHandle(), m_swapchain, nullptr);
-
 	vkDestroySurfaceKHR(Context::get()->getInstance(), m_surface, nullptr);
 }
 
-void Swapchain::present()
-{
-	/*
-	VkSemaphore waitSemaphores[MAX_FRAMES_IN_FLIGHT];
-
-	for (FrameData& data : m_frameData)
-	{
-		data.commandBuffer->
-	}
-	*/
-	
+void Swapchain::present() {	
 	VkSemaphore waitSemaphore = getCurrentCommandBuffer()->m_renderFinishedSemaphores->getHandle();
 
 	VkPresentInfoKHR presentInfo{};
@@ -53,10 +42,8 @@ void Swapchain::present()
 
 }
 
-void Swapchain::acquireNexImage()
-{
+void Swapchain::acquireNexImage() {
 	vkAcquireNextImageKHR(Device::getHandle(), m_swapchain, UINT64_MAX,getCurrentCommandBuffer()->m_imageAvailableSemaphores->getHandle(), VK_NULL_HANDLE, &m_currentImageIndex);
-
 }
 
 void Swapchain::createSwapchain() {
@@ -101,9 +88,7 @@ void Swapchain::createSwapchain() {
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-	if (vkCreateSwapchainKHR(Device::getHandle(), &createInfo, nullptr, &m_swapchain) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create swap chain");
-	}
+	VK_CKECK(vkCreateSwapchainKHR(Device::getHandle(), &createInfo, nullptr, &m_swapchain));
 
 	std::vector<VkImage> swapchainImages;
 	vkGetSwapchainImagesKHR(Device::getHandle(), m_swapchain, &imageCount, nullptr);
@@ -135,11 +120,9 @@ void Swapchain::createSwapchain() {
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
-		if (vkCreateImageView(Device::getHandle(), &createInfo, nullptr, &imageView) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create image views!");
-		}
+		VK_CKECK(vkCreateImageView(Device::getHandle(), &createInfo, nullptr, &imageView));
 
-		m_swapchainTextures.emplace_back(std::make_shared<Texture2D>(swapchainImages[i], imageView, m_swapchainExtent.width, m_swapchainExtent.height, m_swapchainImageFormat));
+		m_swapchainTextures.emplace_back(std::make_shared<Texture2D>(TextureType::SWAPCHAIN, swapchainImages[i], imageView, m_swapchainExtent.width, m_swapchainExtent.height, m_swapchainImageFormat));
 	}
 }
 

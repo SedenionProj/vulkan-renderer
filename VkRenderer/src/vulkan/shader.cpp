@@ -5,9 +5,7 @@
 static std::vector<char> readFile(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
-	if (!file.is_open()) {
-		throw std::runtime_error("failed to open file");
-	}
+	DEBUG_ASSERT(file.is_open(), "failed to open file %s", filename.c_str());
 
 	size_t fileSize = (size_t)file.tellg();
 	std::vector<char> buffer(fileSize);
@@ -50,7 +48,7 @@ VkFormat spirvTypeToVkFormat(const spirv_cross::SPIRType& type) {
 		}
 	}
 
-	throw std::runtime_error("Unsupported vertex attribute format");
+	DEBUG_ERROR("Unsupported vertex attribute format");
 }
 
 uint32_t formatSize(VkFormat format) {
@@ -67,7 +65,7 @@ uint32_t formatSize(VkFormat format) {
 	case VK_FORMAT_R32G32_UINT: return 8;
 	case VK_FORMAT_R32G32B32_UINT: return 12;
 	case VK_FORMAT_R32G32B32A32_UINT: return 16;
-	default: throw std::runtime_error("Unhandled VkFormat in format_size");
+	default: DEBUG_ERROR("Unhandled VkFormat");
 	}
 }
 
@@ -104,8 +102,16 @@ Shader::Shader(const char* vertPath, const char* fragPath) {
 
 Shader::~Shader()
 {
+	destroy();
 	for(auto& layout : m_descriptorSetLayouts)
 		vkDestroyDescriptorSetLayout(Device::getHandle(), layout, nullptr);
+}
+
+void Shader::destroy()
+{
+	for (auto& stage : m_shaderStages) {
+		vkDestroyShaderModule(Device::getHandle(), stage.module, nullptr);
+	}
 }
 
 VkShaderModule Shader::createShaderModule(const std::vector<char>& code) {
@@ -114,9 +120,7 @@ VkShaderModule Shader::createShaderModule(const std::vector<char>& code) {
 	createInfo.codeSize = code.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 	VkShaderModule shaderModule;
-	if (vkCreateShaderModule(Device::getHandle(), &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create shader module!");
-	}
+	VK_CKECK(vkCreateShaderModule(Device::getHandle(), &createInfo, nullptr, &shaderModule));
 
 	return shaderModule;
 }
@@ -155,35 +159,6 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 		}
 		m_vertexInputStride = currOffset;
 	}
-	/*
-	if (stage == VK_SHADER_STAGE_VERTEX_BIT) {
-		uint32_t currOffset = 0;
-
-		for (auto& resource : resources.stage_inputs) {
-			const spirv_cross::SPIRType& type = comp.get_type(resource.type_id);
-			VkFormat format = spirvTypeToVkFormat(type);
-
-			VkVertexInputAttributeDescription desc{};
-			desc.binding = 0; // usually 0 if single binding
-			desc.location = comp.get_decoration(resource.id, spv::DecorationLocation);
-			desc.format = format;
-
-			// Use offsetof() instead of currOffset for offset
-			if (resource.name == "inPosition") desc.offset = offsetof(Vertex, pos);
-			else if (resource.name == "inNormal") desc.offset = offsetof(Vertex, normal);
-			else if (resource.name == "inTexCoord") desc.offset = offsetof(Vertex, texCoord);
-			else if (resource.name == "inTangent") desc.offset = offsetof(Vertex, tangent);
-			else if (resource.name == "inBitangent") desc.offset = offsetof(Vertex, bitangent);
-			else {
-				desc.offset = 0; // fallback
-			}
-
-			m_attributeDescriptions.push_back(desc);
-		}
-
-		m_vertexInputStride = sizeof(Vertex);
-	}
-	*/
 
 	// uniform data
 	for (auto& uniform : resources.uniform_buffers) {
@@ -214,8 +189,6 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 			comp.get_decoration(uniform.id, spv::DecorationDescriptorSet),
 			});
 		}
-
-		
 	}
 
 	// image sampler data
@@ -258,9 +231,7 @@ void Shader::createPipelineLayout() {
 		layoutInfo.pBindings = bindings.data();
 
 		VkDescriptorSetLayout layout;
-		if (vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &layout) != VK_SUCCESS) {
-			throw std::runtime_error("failed to create descriptor set layout!");
-		}
+		VK_CKECK(vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &layout));
 
 		m_descriptorSetLayouts.push_back(layout);
 	}
@@ -270,7 +241,5 @@ void Shader::createPipelineLayout() {
 	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(m_descriptorSetLayouts.size());
 	pipelineLayoutInfo.pSetLayouts = m_descriptorSetLayouts.data();
 
-	if (vkCreatePipelineLayout(Device::getHandle(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create pipeline layout!");
-	}
+	VK_CKECK(vkCreatePipelineLayout(Device::getHandle(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
 }

@@ -1,8 +1,5 @@
 #pragma once
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
-#define ASSETS_PATH "../../../VkRenderer/assets/"
+#include "src/vulkan/vkHeader.hpp"
 
 struct DescriptorInfo {
 	VkDescriptorType type;
@@ -17,12 +14,15 @@ public:
 	Shader(const char* vertPath, const char* fragPath);
 	~Shader();
 
+	void destroy();
+
 	VkShaderModule createShaderModule(const std::vector<char>& code);
+
 	std::vector<VkVertexInputAttributeDescription>& getAttributeDescriptions() { return m_attributeDescriptions; }
 	std::vector<VkDescriptorSetLayout>& getDescriptorSetLayouts() { return m_descriptorSetLayouts; }
 	std::vector<DescriptorInfo>& getDescriptorInfos() { return m_descriptorInfos; }
-	uint32_t getVertexInputStride() { return m_vertexInputStride; }
-	VkPipelineLayout getPipelineLayout() { return m_pipelineLayout; }
+	uint32_t getVertexInputStride() const { return m_vertexInputStride; }
+	VkPipelineLayout getPipelineLayout() const { return m_pipelineLayout; }
 	
 	VkPipelineShaderStageCreateInfo m_shaderStages[2];
 

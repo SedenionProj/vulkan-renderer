@@ -14,17 +14,15 @@ file(GLOB_RECURSE SOURCES
 
 add_executable(VkRenderer ${SOURCES})
 
-find_package(Vulkan REQUIRED)
 target_include_directories (VkRenderer PUBLIC 
     ${CMAKE_SOURCE_DIR}/VkRenderer
-    ${VULKAN_INCLUDE_DIRS}
     ${GLM_INCLUDE}
     ${STB_INCLUDE}
     ${TINYOBJECTLOADER_INCLUDE}
     ${SPIRV_CROSS_INCLUDE}
 )
 target_link_libraries(VkRenderer 
-    Vulkan::Vulkan
+    volk
     glfw
     spirv-cross-cpp
 )

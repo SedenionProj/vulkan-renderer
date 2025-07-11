@@ -1,10 +1,6 @@
 #pragma once
-#include "src/vulkan/swapchain.hpp"
+#include "src/vulkan/vkHeader.hpp"
 #include "src/vulkan/buffer.hpp"
-
-class Texture2D;
-class Shader;
-class DescriptorSet;
 
 struct MaterialProperties {
 	float brightness = 0.f;

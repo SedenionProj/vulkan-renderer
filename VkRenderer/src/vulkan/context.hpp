@@ -1,23 +1,22 @@
 #pragma once
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
-class Device;
+#include "src/vulkan/vkHeader.hpp"
 
 class Context {
 public:
+	~Context();
+
 	static void create();
 
 	void createInstance();
 
 
 	static Context* get() { return s_context; }
-	VkInstance getInstance() { return m_instance; }
-	std::shared_ptr<Device> getDevice() { return m_device; }
+	VkInstance getInstance() const { return m_instance; }
+	std::shared_ptr<Device> getDevice() const { return m_device; }
 
 private:
 	Context();
-	~Context();
+	
 
 	bool checkValidationLayerSupport();
 	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);

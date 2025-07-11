@@ -1,6 +1,8 @@
+#define _CRTDBG_MAP_ALLOC
+#include <cstdlib>
+#include <crtdbg.h>
 #include <iostream>
 #include <stdexcept>
-#include <cstdlib>
 #include <vector>
 #include <optional>
 #include <set>

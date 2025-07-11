@@ -47,7 +47,7 @@ Model::Model(std::filesystem::path filePath) {
 
 	tinyobj::ObjReader reader;
 
-	if (!reader.ParseFromFile(filePath.string(), reader_config)) {
+	if (!reader.ParseFromFile(ASSETS_PATH+filePath.string(), reader_config)) {
 		if (!reader.Error().empty()) {
 			std::cerr << "TinyObjReader: " << reader.Error();
 		}
@@ -68,7 +68,7 @@ Model::Model(std::filesystem::path filePath) {
 
 	auto shader = std::make_shared<Shader>("basicVert.spv", "basicFrag.spv");
 
-	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>("assets/models/viking_room/viking_room.png"); // todo replace by white tex
+	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>(ASSETS_PATH"models/viking_room/viking_room.png"); // todo replace by white tex
 
 	for (const auto& shape : shapes) {
 
@@ -142,7 +142,7 @@ Model::Model(std::filesystem::path filePath) {
 			if (!mp->diffuse_texname.empty()) {
 				// todo : texture loader helper function
 				material->m_properties.brightness = 1;
-				auto texPath = filePath.parent_path() / mp->diffuse_texname;
+				auto texPath = ASSETS_PATH / filePath.parent_path() / mp->diffuse_texname;
 
 				std::string texPathStr = texPath.string();
 				auto it = textureCache.find(texPathStr);
@@ -161,7 +161,7 @@ Model::Model(std::filesystem::path filePath) {
 
 			if (!mp->specular_texname.empty()) {
 				material->m_properties.reflectance = 1.f;
-				auto texPath = filePath.parent_path() / mp->specular_texname;
+				auto texPath = ASSETS_PATH / filePath.parent_path() / mp->specular_texname;
 
 				std::string texPathStr = texPath.string();
 				auto it = textureCache.find(texPathStr);
@@ -179,7 +179,7 @@ Model::Model(std::filesystem::path filePath) {
 			}
 
 			if (!mp->normal_texname.empty()) {
-				auto texPath = filePath.parent_path() / mp->normal_texname;
+				auto texPath = ASSETS_PATH / filePath.parent_path() / mp->normal_texname;
 
 				std::string texPathStr = texPath.string();
 				auto it = textureCache.find(texPathStr);
@@ -197,7 +197,7 @@ Model::Model(std::filesystem::path filePath) {
 
 			if (!mp->bump_texname.empty()) {
 				material->m_properties.roughness = 1.f;
-				auto texPath = filePath.parent_path() / mp->bump_texname;
+				auto texPath = ASSETS_PATH / filePath.parent_path() / mp->bump_texname;
 
 				std::string texPathStr = texPath.string();
 				auto it = textureCache.find(texPathStr);

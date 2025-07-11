@@ -11,6 +11,11 @@ DescriptorSet::DescriptorSet(std::shared_ptr<Shader> shader, uint32_t set)
 	createDescriptorSets();
 }
 
+DescriptorSet::~DescriptorSet()
+{
+	vkDestroyDescriptorPool(Device::getHandle(), m_descriptorPool, nullptr);
+}
+
 void DescriptorSet::createDescriptorPool() {
 	std::vector<VkDescriptorPoolSize> poolSizes;
 	for (auto& info : m_shader->getDescriptorInfos()) {
@@ -27,9 +32,7 @@ void DescriptorSet::createDescriptorPool() {
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
 	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-	if (vkCreateDescriptorPool(Device::getHandle(), &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create descriptor pool!");
-	}
+	VK_CKECK(vkCreateDescriptorPool(Device::getHandle(), &poolInfo, nullptr, &m_descriptorPool));
 }
 
 void DescriptorSet::createDescriptorSets() {
@@ -41,9 +44,7 @@ void DescriptorSet::createDescriptorSets() {
 	allocInfo.pSetLayouts = layouts.data();
 
 	m_descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	if (vkAllocateDescriptorSets(Device::getHandle(), &allocInfo, m_descriptorSets.data()) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate descriptor sets!");
-	}
+	VK_CKECK(vkAllocateDescriptorSets(Device::getHandle(), &allocInfo, m_descriptorSets.data()));
 }
 
 void DescriptorSet::update(std::vector<UniformBuffer>& uniformBuffers, std::shared_ptr<Texture> texture, uint32_t i) {

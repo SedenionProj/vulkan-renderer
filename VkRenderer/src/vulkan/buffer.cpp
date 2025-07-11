@@ -18,9 +18,7 @@ void Buffer::createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPrope
 	bufferInfo.usage = usage;
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-	if (vkCreateBuffer(Device::getHandle(), &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
-		throw std::runtime_error("failed to create buffer!");
-	}
+	VK_CKECK(vkCreateBuffer(Device::getHandle(), &bufferInfo, nullptr, &buffer));
 
 	VkMemoryRequirements memRequirements;
 	vkGetBufferMemoryRequirements(Device::getHandle(), buffer, &memRequirements);
@@ -30,9 +28,7 @@ void Buffer::createBuffer(uint32_t size, VkBufferUsageFlags usage, VkMemoryPrope
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = Context::get()->getDevice()->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
 
-	if (vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) {
-		throw std::runtime_error("failed to allocate buffer memory!");
-	}
+	VK_CKECK(vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &bufferMemory));
 
 	vkBindBufferMemory(Device::getHandle(), buffer, bufferMemory, 0);
 }

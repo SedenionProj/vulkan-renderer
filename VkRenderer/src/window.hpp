@@ -1,18 +1,16 @@
 #pragma once
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
 class Context;
 class Swapchain;
+struct GLFWwindow;
 
 class Window {
 public:
 	Window();
 	~Window();
 
-	GLFWwindow* getHandle() { return m_handle; }
-	std::shared_ptr<Swapchain> getSwapchain(){ return m_swapchain; }
+	GLFWwindow* getHandle() const { return m_handle; }
+	std::shared_ptr<Swapchain> getSwapchain() const { return m_swapchain; }
 
 	struct Data {
 		uint32_t width;

@@ -1,6 +1,5 @@
 #pragma once
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include "src/vulkan/vkHeader.hpp"
 #include "src/vulkan/context.hpp"
 
 struct QueueFamilyIndices {
@@ -20,7 +19,7 @@ public:
 	PhysicalDevice();
 	~PhysicalDevice();
 
-	VkPhysicalDevice getHandle() { return m_physicalDevice; }
+	VkPhysicalDevice getHandle() const { return m_physicalDevice; }
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -39,8 +38,6 @@ private:
 	const std::vector<const char*> m_deviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME
 	};
-
-	std::shared_ptr<Context> m_ctx;
 
 	friend class Device;
 };
