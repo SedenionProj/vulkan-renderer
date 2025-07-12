@@ -10,4 +10,9 @@ C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag cubemap.frag -o cubemap
 C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert shadowMap.vert -o shadowMapVert.spv
 C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag shadowMap.frag -o shadowMapFrag.spv
 
+C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert depthPrePass.vert -o depthPrePassVert.spv
+C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag depthPrePass.frag -o depthPrePassFrag.spv
+
+C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag ssao.frag -o ssaoFrag.spv
+
 pause

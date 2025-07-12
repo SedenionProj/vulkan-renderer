@@ -35,6 +35,40 @@ private:
 			m_transformUBO.emplace_back((uint32_t)sizeof(UniformBufferObject));
 		}
 
+		// depth pre-pass
+		m_depthPrePass.texture = std::make_shared<DepthTexture>(1280, 720, VK_SAMPLE_COUNT_1_BIT);
+		m_depthPrePass.texture->createSampler();
+
+		pipelineDesc.shader = std::make_shared<Shader>("depthPrePassVert.spv", "depthPrePassFrag.spv");
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+		pipelineDesc.clear = true;
+		pipelineDesc.attachmentInfos = { { m_depthPrePass.texture } };
+		pipelineDesc.swapchain = nullptr;
+
+		m_depthPrePass.pipeline = std::make_shared<Pipeline>(pipelineDesc);
+
+		m_depthPrePass.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+		m_depthPrePass.descriptorSet->setUniform(m_transformUBO, 0);
+
+		// ssao
+		m_ssaoPass.texture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
+		m_ssaoPass.texture->createImage(VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		m_ssaoPass.texture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+		m_ssaoPass.texture->createSampler();
+
+		pipelineDesc.shader = std::make_shared<Shader>("postProcessVert.spv", "ssaoFrag.spv");
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+		pipelineDesc.clear = true;
+		pipelineDesc.attachmentInfos = { { m_ssaoPass.texture } };
+		pipelineDesc.swapchain = nullptr;
+		m_ssaoPass.pipeline = std::make_shared<Pipeline>(pipelineDesc);
+
+		m_ssaoPass.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+		m_ssaoPass.descriptorSet->setUniform(m_transformUBO, 0);
+		m_ssaoPass.descriptorSet->setTexture(m_depthPrePass.texture, 1);
+
 		// shadow
 		float orthoSize = 30.0f;
 		float nearPlane = 1.0f;
@@ -102,6 +136,7 @@ private:
 			if (mesh->m_material != nullptr) {
 				mesh->m_material->m_descriptorSet->setUniform(m_transformUBO, 0);
 				mesh->m_material->m_descriptorSet->setTexture(m_shadowData.texture, 5);
+				mesh->m_material->m_descriptorSet->setTexture(m_ssaoPass.texture, 6);
 			}
 		}
 
@@ -218,6 +253,36 @@ private:
 		commandBuffer->reset();
 		commandBuffer->beginRecording();
 
+		// depth pre-pass
+		commandBuffer->beginRenderpass(m_depthPrePass.pipeline->getRenderPass(), m_depthPrePass.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->bindPipeline(m_depthPrePass.pipeline);
+		commandBuffer->updateViewport(1280, 720);
+		for (auto mesh : m_sceneData.model->m_meshes) {
+			if (mesh->m_material == nullptr)
+				continue;
+
+			VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
+			VkDeviceSize offsets[] = { 0 };
+			VkDescriptorSet descriptorSets[] = { m_depthPrePass.descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
+			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_depthPrePass.descriptorSet->getShader()->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
+			vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
+			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
+			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+		}
+
+		commandBuffer->endRenderPass();
+
+		// ssao
+		commandBuffer->beginRenderpass(m_ssaoPass.pipeline->getRenderPass(), m_ssaoPass.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->bindPipeline(m_ssaoPass.pipeline);
+
+		VkDescriptorSet ssaoDescriptorSet = m_ssaoPass.descriptorSet->getHandle(swapchain->getCurrentFrameIndex());
+		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_ssaoPass.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &ssaoDescriptorSet, 0, nullptr); // todo: abstract these
+
+		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
+
+		commandBuffer->endRenderPass();
+
 		// shadow pass
 		commandBuffer->beginRenderpass(m_shadowData.pipeline->getRenderPass(), m_shadowData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], m_shadowData.resolution, m_shadowData.resolution);
 		commandBuffer->bindPipeline(m_shadowData.pipeline);
@@ -311,6 +376,18 @@ private:
 	std::shared_ptr<Window> m_window;
 	std::vector<UniformBuffer> m_transformUBO;
 
+	struct DepthPrePass {
+		std::shared_ptr<Texture2D> texture;
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<DescriptorSet> descriptorSet;
+	};
+
+	struct SSAOPass {
+		std::shared_ptr<Texture2D> texture;
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<DescriptorSet> descriptorSet;
+	};
+
 	struct SceneData {
 		std::shared_ptr<Model> model;
 		std::shared_ptr<Pipeline> pipeline;
@@ -344,6 +421,8 @@ private:
 	SceneData m_sceneData;
 	SkyBoxData m_skyBoxData;
 	ShadowData m_shadowData;
+	DepthPrePass m_depthPrePass;
+	SSAOPass m_ssaoPass;
 };
 
 int main() {

@@ -29,6 +29,7 @@ layout(set = 0, binding = 1) uniform sampler2D u_albedoMap;
 layout(set = 0, binding = 2) uniform sampler2D u_specularMap;
 layout(set = 0, binding = 3) uniform sampler2D u_normalMap;
 layout(set = 0, binding = 5) uniform sampler2D u_shadowMap;
+layout(set = 0, binding = 6) uniform sampler2D u_ssaoMap;
 
 vec3 getNormal(){
     if(materialData.roughness >= 0.01){
@@ -101,6 +102,9 @@ float getShadow(vec4 fragPosLightSpace) {
     return shadow;
 }
 
+float getSSAO(vec2 uv) {
+    return texture(u_ssaoMap, uv).r;
+}
 
 void main() {
     vec3 n = getNormal();
@@ -120,7 +124,9 @@ void main() {
 
     float shadow = getShadow(data.fragPosLightSpace);
 
+    float ssao = getSSAO(gl_FragCoord.xy / vec2(1280,720));
+
     vec3 color = (ambient + diffuse ) * albedo + 4.0 * specular * spec;
 
-    outColor = vec4(vec3(color)*(1.0 - shadow*0.75), 1.0);
+    outColor = vec4(vec3(color)*(1.0 - shadow*0.75)*ssao*1.5, 1.0);
 }
