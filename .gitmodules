@@ -16,3 +16,6 @@
 [submodule "VkRenderer/vendor/volk"]
 	path = VkRenderer/vendor/volk
 	url = https://github.com/zeux/volk.git
+[submodule "VkRenderer/vendor/imgui"]
+	path = VkRenderer/vendor/imgui
+	url = https://github.com/ocornut/imgui
