@@ -9,7 +9,7 @@
 
 Swapchain::Swapchain(Window& window)
 	:  m_window(window) {
-	VK_CKECK(glfwCreateWindowSurface(Context::get()->getInstance(), window.getHandle(), nullptr, &m_surface));
+	VK_CHECK(glfwCreateWindowSurface(Context::get()->getInstance(), window.getHandle(), nullptr, &m_surface));
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		m_frameData[i].commandPool = std::make_shared<CommandPool>();
@@ -88,7 +88,7 @@ void Swapchain::createSwapchain() {
 	createInfo.clipped = VK_TRUE;
 	createInfo.oldSwapchain = VK_NULL_HANDLE;
 
-	VK_CKECK(vkCreateSwapchainKHR(Device::getHandle(), &createInfo, nullptr, &m_swapchain));
+	VK_CHECK(vkCreateSwapchainKHR(Device::getHandle(), &createInfo, nullptr, &m_swapchain));
 
 	std::vector<VkImage> swapchainImages;
 	vkGetSwapchainImagesKHR(Device::getHandle(), m_swapchain, &imageCount, nullptr);
@@ -120,7 +120,7 @@ void Swapchain::createSwapchain() {
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
-		VK_CKECK(vkCreateImageView(Device::getHandle(), &createInfo, nullptr, &imageView));
+		VK_CHECK(vkCreateImageView(Device::getHandle(), &createInfo, nullptr, &imageView));
 
 		m_swapchainTextures.emplace_back(std::make_shared<Texture2D>(TextureType::SWAPCHAIN, swapchainImages[i], imageView, m_swapchainExtent.width, m_swapchainExtent.height, m_swapchainImageFormat));
 	}

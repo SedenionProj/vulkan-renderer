@@ -24,7 +24,7 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 
 Context::Context() {
-	VK_CKECK(volkInitialize());
+	VK_CHECK(volkInitialize());
 	createInstance();
 	setupDebugMessenger();
 }
@@ -48,7 +48,7 @@ void Context::create()
 }
 
 void Context::createInstance() {
-	VK_CKECK(enableValidationLayers && !checkValidationLayerSupport());
+	VK_CHECK(enableValidationLayers && !checkValidationLayerSupport());
 
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -73,7 +73,7 @@ void Context::createInstance() {
 		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
 	}
 
-	VK_CKECK(vkCreateInstance(&createInfo, nullptr, &m_instance));
+	VK_CHECK(vkCreateInstance(&createInfo, nullptr, &m_instance));
 	volkLoadInstance(m_instance);
 }
 
@@ -97,7 +97,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
 	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
 	void* pUserData) {
 
-	std::cerr << "validation layer msg: " << pCallbackData->pMessage << std::endl;
+	std::cerr << "---------------------\nvalidation layer msg: " << pCallbackData->pMessage << std::endl;
 
 	return VK_FALSE;
 }
@@ -121,7 +121,7 @@ void Context::setupDebugMessenger() {
 	VkDebugUtilsMessengerCreateInfoEXT createInfo;
 	populateDebugMessengerCreateInfo(createInfo);
 
-	VK_CKECK(CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger));
+	VK_CHECK(CreateDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr, &m_debugMessenger));
 }
 
 bool Context::checkValidationLayerSupport() {

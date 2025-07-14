@@ -9,21 +9,27 @@
 #include "src/vulkan/texture.hpp"
 #include "src/vulkan/syncObjects.hpp"
 #include "src/vulkan/shader.hpp"
+#include "src/vulkan/imguiContext.hpp"
 #include "src/model.hpp"
 #include "src/window.hpp"
 #include "src/material.hpp"
-#include "GLFW/glfw3.h"
+#include <GLFW/glfw3.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_vulkan.h>
+
 // todo : framebuffer resize
+
 class Renderer {
 
 public:
 	void run() {
 		initVulkan();
+		m_gui = std::make_shared<Gui>(m_window);
 		mainLoop();
 	}
 
 private:
-
 	void initVulkan() {
 		m_window = std::make_shared<Window>();
 
@@ -58,7 +64,7 @@ private:
 		m_ssaoPass.texture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 		m_ssaoPass.texture->createSampler();
 
-		pipelineDesc.shader = std::make_shared<Shader>("postProcessVert.spv", "ssaoFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "ssaoFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_ssaoPass.texture } };
@@ -80,7 +86,7 @@ private:
 			nearPlane, farPlane
 		);
 
-		glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.0f));
+		glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.2f));
 		glm::vec3 lightPos = -lightDir * 25.0f;
 		m_shadowData.lightPos = lightPos;
 		
@@ -164,22 +170,25 @@ private:
 		m_skyBoxData.descriptorSet->setTexture(m_skyBoxData.cubeMap, 1);
 
 		// post process
-		pipelineDesc.shader = std::make_shared<Shader>("postProcessVert.spv", "postProcessFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "postProcessFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_window->getSwapchain()->m_swapchainTextures[0] } };
 		pipelineDesc.swapchain = m_window->getSwapchain();
 
+		m_postProcessData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 		m_postProcessData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
 		m_postProcessData.descriptorSet->setTexture(m_sceneData.resolveTexture, 0);
-		m_postProcessData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 	}
 	
 	void updateUniformBuffer(uint32_t currentImage) {
-		static auto startTime = std::chrono::high_resolution_clock::now();
+		static auto lastTime = std::chrono::high_resolution_clock::now();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+		std::chrono::duration<float> delta = currentTime - lastTime;
+		m_deltaTime = delta.count();
+
+		lastTime = currentTime;
 
 		// Static camera state
 		static glm::vec3 cameraPos = glm::vec3(0.0f, 10.0f, 0.0f);
@@ -248,6 +257,7 @@ private:
 		updateUniformBuffer(swapchain->getCurrentFrameIndex());
 
 		// begin
+		m_gui->begin();
 		commandBuffer->getFence()->wait();
 		swapchain->acquireNexImage();
 		commandBuffer->reset();
@@ -334,6 +344,11 @@ private:
 
 		commandBuffer->endRenderPass();
 
+		// ImGui rendering
+		ImGui::Begin("debug");
+		ImGui::Text("fps: %.1f", 1.f/m_deltaTime);
+		ImGui::End();
+
 		// post processing pass
 		commandBuffer->beginRenderpass(m_postProcessData.pipeline->getRenderPass(), m_postProcessData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_postProcessData.pipeline);
@@ -342,6 +357,9 @@ private:
 		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_postProcessData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &postProcessDescriptorSet, 0, nullptr); // todo: abstract these
 
 		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
+
+		ImGui::Render();
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer->getHandle());
 
 		commandBuffer->endRenderPass();
 
@@ -374,6 +392,7 @@ private:
 
 private:
 	std::shared_ptr<Window> m_window;
+	std::shared_ptr<Gui> m_gui;
 	std::vector<UniformBuffer> m_transformUBO;
 
 	struct DepthPrePass {
@@ -423,6 +442,8 @@ private:
 	ShadowData m_shadowData;
 	DepthPrePass m_depthPrePass;
 	SSAOPass m_ssaoPass;
+
+	float m_deltaTime = 0.0f;
 };
 
 int main() {

@@ -12,7 +12,7 @@ struct PipelineDesc {
 
 class Pipeline {
 public:
-	Pipeline(PipelineDesc info);
+	Pipeline(const PipelineDesc& info);
 	~Pipeline();
 	
 	VkPipeline getHandle() const { return m_handle; }

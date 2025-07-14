@@ -1,13 +1,14 @@
 #pragma once
 
 #define VK_NO_PROTOTYPES
+#define IMGUI_IMPL_VULKAN_USE_VOLK
 #include <volk.h>
 
 #define MAX_FRAMES_IN_FLIGHT 2
 
 #define ASSETS_PATH "../../../VkRenderer/assets/"
 
-#define new new(_CLIENT_BLOCK,__FILE__, __LINE__)
+//#define new new(_CLIENT_BLOCK,__FILE__, __LINE__)
 
 #if 1
 	#if 1
@@ -25,7 +26,7 @@
 	#define DEBUG_ASSERT(x, fmt, ...) \
 		    if (!(x)) DEBUG_ERROR("Assertion failed: " fmt, ##__VA_ARGS__)
 	
-	#define VK_CKECK(x, fmt, ...) \
+	#define VK_CHECK(x, fmt, ...) \
 			if ((x != VK_SUCCESS)) DEBUG_ERROR("VK " fmt, ##__VA_ARGS__)
 
 	#else

@@ -23,3 +23,17 @@ if (WIN32)
    set(VOLK_STATIC_DEFINES VK_USE_PLATFORM_WIN32_KHR)
 endif()
 add_subdirectory(volk)
+
+# imgui
+set (IMGUI_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/imgui PARENT_SCOPE)
+file(GLOB IMGUI_SOURCE
+	"imgui/*.cpp"
+
+	"imgui/backends/imgui_impl_glfw.cpp"
+	"imgui/backends/imgui_impl_vulkan.cpp"
+)
+
+add_library(imgui STATIC ${IMGUI_SOURCE})
+target_compile_definitions(imgui PRIVATE IMGUI_IMPL_VULKAN_USE_VOLK)
+target_include_directories(imgui PUBLIC imgui)
+target_link_libraries(imgui PRIVATE glfw volk)

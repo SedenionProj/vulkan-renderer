@@ -20,6 +20,7 @@ public:
 	~PhysicalDevice();
 
 	VkPhysicalDevice getHandle() const { return m_physicalDevice; }
+	QueueFamilyIndices getQueueFamilyIndices() const { return m_queueFamilyIndices; }
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
@@ -34,6 +35,7 @@ private:
 
 private:
 	VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
+	QueueFamilyIndices m_queueFamilyIndices;
 
 	const std::vector<const char*> m_deviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME

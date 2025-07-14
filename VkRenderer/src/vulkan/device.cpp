@@ -28,6 +28,7 @@ void PhysicalDevice::pickPhysicalDevice() {
 
 bool PhysicalDevice::isDeviceSuitable(VkPhysicalDevice device) {
 	QueueFamilyIndices indices = findQueueFamilies(device);
+	m_queueFamilyIndices = indices;
 
 	bool extensionsSupported = checkDeviceExtensionSupport(device);
 
@@ -156,7 +157,7 @@ void Device::createDevice() {
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(m_physicalDevice.m_deviceExtensions.size());
 	createInfo.ppEnabledExtensionNames = m_physicalDevice.m_deviceExtensions.data();
 
-	VK_CKECK(vkCreateDevice(m_physicalDevice.getHandle(), &createInfo, nullptr, &m_handle));
+	VK_CHECK(vkCreateDevice(m_physicalDevice.getHandle(), &createInfo, nullptr, &m_handle));
 
 	volkLoadDevice(m_handle);
 

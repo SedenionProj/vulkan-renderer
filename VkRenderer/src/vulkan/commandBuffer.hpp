@@ -20,6 +20,7 @@ public:
 
 	void beginRecording();
 	void beginRenderpass(std::shared_ptr<RenderPass> renderPass, std::shared_ptr<Framebuffer> framebuffer, uint32_t width, uint32_t height);
+	void beginRenderpass(VkRenderPass renderPass, std::shared_ptr<Framebuffer> framebuffer, uint32_t width, uint32_t height);
 	void endRecording();
 	void endRenderPass();
 

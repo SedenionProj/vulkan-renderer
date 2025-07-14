@@ -20,11 +20,14 @@ target_include_directories (VkRenderer PUBLIC
     ${STB_INCLUDE}
     ${TINYOBJECTLOADER_INCLUDE}
     ${SPIRV_CROSS_INCLUDE}
+    ${IMGUI_INCLUDE}
+	${IMGUI_INCLUDE}/backends
+	${IMGUI_INCLUDE}/misc/cpp
 )
 target_link_libraries(VkRenderer 
     volk
     glfw
     spirv-cross-cpp
+    imgui
 )
-
 target_precompile_headers(VkRenderer PRIVATE VkRenderer/src/pch.hpp)

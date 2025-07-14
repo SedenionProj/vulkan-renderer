@@ -13,7 +13,7 @@ CommandPool::CommandPool() {
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
-	VK_CKECK(vkCreateCommandPool(Device::getHandle(), &poolInfo, nullptr, &m_handle));
+	VK_CHECK(vkCreateCommandPool(Device::getHandle(), &poolInfo, nullptr, &m_handle));
 }
 
 CommandPool::~CommandPool() {
@@ -28,7 +28,7 @@ CommandBuffer::CommandBuffer(VkCommandPool commandPool)
 	allocInfo.commandPool = m_commandPool;
 	allocInfo.commandBufferCount = 1;
 
-	VK_CKECK(vkAllocateCommandBuffers(Device::getHandle(), &allocInfo, &m_handle));
+	VK_CHECK(vkAllocateCommandBuffers(Device::getHandle(), &allocInfo, &m_handle));
 
 	m_imageAvailableSemaphores = std::make_unique<Semaphore>();
 	m_renderFinishedSemaphores = std::make_unique<Semaphore>();
@@ -44,7 +44,7 @@ void CommandBuffer::beginRecording() {
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-	VK_CKECK(vkBeginCommandBuffer(m_handle, &beginInfo));
+	VK_CHECK(vkBeginCommandBuffer(m_handle, &beginInfo));
 }
 
 void CommandBuffer::beginRenderpass(std::shared_ptr<RenderPass> renderPass, std::shared_ptr<Framebuffer> framebuffer, uint32_t width, uint32_t height)
@@ -66,9 +66,25 @@ void CommandBuffer::beginRenderpass(std::shared_ptr<RenderPass> renderPass, std:
 
 }
 
+void CommandBuffer::beginRenderpass(VkRenderPass renderPass, std::shared_ptr<Framebuffer> framebuffer, uint32_t width, uint32_t height)
+{
+	VkClearValue clearValues = {0.1,0.1,0.1,1.};
+	
+	VkRenderPassBeginInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = renderPass;
+	renderPassInfo.framebuffer = framebuffer->getHandle();
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = { width, height };
+	renderPassInfo.clearValueCount = 1;
+	renderPassInfo.pClearValues = &clearValues;
+	
+	vkCmdBeginRenderPass(m_handle, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+}
+
 void CommandBuffer::endRecording()
 {
-	VK_CKECK(vkEndCommandBuffer(m_handle));
+	VK_CHECK(vkEndCommandBuffer(m_handle));
 }
 
 void CommandBuffer::endRenderPass()
@@ -104,7 +120,7 @@ void CommandBuffer::submit(bool semaphores)
 
 	m_fence->reset();
 
-	VK_CKECK(vkQueueSubmit(Device::get()->getGraphicsQueue(), 1, &submitInfo, m_fence->getHandle()));
+	VK_CHECK(vkQueueSubmit(Device::get()->getGraphicsQueue(), 1, &submitInfo, m_fence->getHandle()));
 }
 
 void CommandBuffer::bindPipeline(std::shared_ptr<Pipeline> pipeline)

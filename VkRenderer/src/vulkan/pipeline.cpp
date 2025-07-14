@@ -6,7 +6,7 @@
 #include "src/vulkan/swapchain.hpp"
 #include "src/vulkan/Texture.hpp"
 
-Pipeline::Pipeline(PipelineDesc info)
+Pipeline::Pipeline(const PipelineDesc& info)
 	: m_shader(info.shader) {
 	m_pipelineLayout = m_shader->getPipelineLayout();
 
@@ -135,7 +135,7 @@ Pipeline::Pipeline(PipelineDesc info)
 	pipelineInfo.layout = m_pipelineLayout;
 	pipelineInfo.renderPass = m_renderPass->getHandle();
 	pipelineInfo.subpass = 0;
-	VK_CKECK(vkCreateGraphicsPipelines(Device::getHandle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_handle));
+	VK_CHECK(vkCreateGraphicsPipelines(Device::getHandle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_handle));
 
 	//m_shader->destroy();
 }

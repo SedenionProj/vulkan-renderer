@@ -20,7 +20,7 @@ Framebuffer::Framebuffer(const std::vector< std::shared_ptr<Texture>>& textures,
 	framebufferInfo.height = textures.back()->getHeight();
 	framebufferInfo.layers = 1;
 
-	VK_CKECK(vkCreateFramebuffer(Device::getHandle(), &framebufferInfo, nullptr, &m_handle));
+	VK_CHECK(vkCreateFramebuffer(Device::getHandle(), &framebufferInfo, nullptr, &m_handle));
 }
 
 Framebuffer::~Framebuffer() {

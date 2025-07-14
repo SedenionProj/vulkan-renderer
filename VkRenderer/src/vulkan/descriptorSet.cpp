@@ -32,7 +32,7 @@ void DescriptorSet::createDescriptorPool() {
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
 	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-	VK_CKECK(vkCreateDescriptorPool(Device::getHandle(), &poolInfo, nullptr, &m_descriptorPool));
+	VK_CHECK(vkCreateDescriptorPool(Device::getHandle(), &poolInfo, nullptr, &m_descriptorPool));
 }
 
 void DescriptorSet::createDescriptorSets() {
@@ -44,7 +44,7 @@ void DescriptorSet::createDescriptorSets() {
 	allocInfo.pSetLayouts = layouts.data();
 
 	m_descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-	VK_CKECK(vkAllocateDescriptorSets(Device::getHandle(), &allocInfo, m_descriptorSets.data()));
+	VK_CHECK(vkAllocateDescriptorSets(Device::getHandle(), &allocInfo, m_descriptorSets.data()));
 }
 
 void DescriptorSet::update(std::vector<UniformBuffer>& uniformBuffers, std::shared_ptr<Texture> texture, uint32_t i) {

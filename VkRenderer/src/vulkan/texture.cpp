@@ -33,7 +33,7 @@ void Texture::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemor
 		imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 	}
 
-	VK_CKECK(vkCreateImage(Device::getHandle(), &imageInfo, nullptr, &m_image));
+	VK_CHECK(vkCreateImage(Device::getHandle(), &imageInfo, nullptr, &m_image));
 
 	VkMemoryRequirements memRequirements;
 	vkGetImageMemoryRequirements(Device::getHandle(), m_image, &memRequirements);
@@ -43,7 +43,7 @@ void Texture::createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemor
 	allocInfo.allocationSize = memRequirements.size;
 	allocInfo.memoryTypeIndex = Device::get()->getPhysicalDevice().findMemoryType(memRequirements.memoryTypeBits, properties);
 
-	VK_CKECK(vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &m_imageMemory));
+	VK_CHECK(vkAllocateMemory(Device::getHandle(), &allocInfo, nullptr, &m_imageMemory));
 
 	vkBindImageMemory(Device::getHandle(), m_image, m_imageMemory, 0);
 }
@@ -63,7 +63,7 @@ void Texture::createImageView(VkImageAspectFlags aspectFlags) {
 		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
 	}
 
-	VK_CKECK(vkCreateImageView(Device::getHandle(), &viewInfo, nullptr, &m_imageView));
+	VK_CHECK(vkCreateImageView(Device::getHandle(), &viewInfo, nullptr, &m_imageView));
 }
 
 void Texture::transitionImageLayout(VkImageLayout newLayout) {
@@ -142,7 +142,7 @@ void Texture::createSampler() {
 	samplerInfo.minLod = 0.0f;
 	samplerInfo.maxLod = static_cast<float>(m_mipLevels);
 
-	VK_CKECK(vkCreateSampler(Device::getHandle(), &samplerInfo, nullptr, &m_sampler));
+	VK_CHECK(vkCreateSampler(Device::getHandle(), &samplerInfo, nullptr, &m_sampler));
 }
 
 void Texture::copyBufferToImage(VkBuffer buffer, uint32_t width, uint32_t height) {

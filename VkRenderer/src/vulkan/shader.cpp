@@ -120,7 +120,7 @@ VkShaderModule Shader::createShaderModule(const std::vector<char>& code) {
 	createInfo.codeSize = code.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 	VkShaderModule shaderModule;
-	VK_CKECK(vkCreateShaderModule(Device::getHandle(), &createInfo, nullptr, &shaderModule));
+	VK_CHECK(vkCreateShaderModule(Device::getHandle(), &createInfo, nullptr, &shaderModule));
 
 	return shaderModule;
 }
@@ -231,7 +231,7 @@ void Shader::createPipelineLayout() {
 		layoutInfo.pBindings = bindings.data();
 
 		VkDescriptorSetLayout layout;
-		VK_CKECK(vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &layout));
+		VK_CHECK(vkCreateDescriptorSetLayout(Device::getHandle(), &layoutInfo, nullptr, &layout));
 
 		m_descriptorSetLayouts.push_back(layout);
 	}
@@ -241,5 +241,5 @@ void Shader::createPipelineLayout() {
 	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(m_descriptorSetLayouts.size());
 	pipelineLayoutInfo.pSetLayouts = m_descriptorSetLayouts.data();
 
-	VK_CKECK(vkCreatePipelineLayout(Device::getHandle(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
+	VK_CHECK(vkCreatePipelineLayout(Device::getHandle(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
 }
