@@ -8,9 +8,8 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool c
 
 	std::vector<VkAttachmentReference> colorAttachmentRef;
 	std::vector<VkAttachmentReference> depthAttachmentRef;
-	VkAttachmentReference colorAttachmentResolveRef;
+	std::vector<VkAttachmentReference> colorAttachmentResolveRef;
 
-	bool resolve = false;
 	uint32_t binding = 0;
 
 	for (auto& attachmentInfo : attachmentInfos) {
@@ -55,8 +54,7 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool c
 		if (tex->getType() == TextureType::COLOR || tex->getType() == TextureType::SWAPCHAIN) {
 			ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 			if (attachmentInfo.resolve) {
-				colorAttachmentResolveRef = ref;
-				resolve = true;
+				colorAttachmentResolveRef.push_back(ref);
 			} else {
 				colorAttachmentRef.push_back(ref);
 			}
@@ -71,7 +69,7 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool c
 	subpass.colorAttachmentCount = static_cast<uint32_t>(colorAttachmentRef.size());
 	subpass.pColorAttachments = colorAttachmentRef.data();
 	subpass.pDepthStencilAttachment = depthAttachmentRef.data();
-	subpass.pResolveAttachments = resolve ? &colorAttachmentResolveRef : nullptr;
+	subpass.pResolveAttachments = colorAttachmentResolveRef.data();
 
 	VkSubpassDependency dependency{};
 	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;

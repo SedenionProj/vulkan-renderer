@@ -202,6 +202,30 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 			comp.get_decoration(image.id, spv::DecorationDescriptorSet),
 			});
 	}
+
+	
+
+	for (auto& pushConst : resources.push_constant_buffers) {
+		auto ranges = comp.get_active_buffer_ranges(pushConst.id);
+		uint32_t size = 0;
+
+		for (auto& range : ranges) {
+			size += static_cast<uint32_t>(range.range);
+		}
+
+		m_pushConstantRanges.push_back({
+				stage,
+				0,
+				size
+			});
+	}
+}
+
+void Shader::pushConstants(VkCommandBuffer cmdBuf, const void* fullDataBlock) {
+	for (const auto& range : m_pushConstantRanges) {
+		const void* ptr = static_cast<const uint8_t*>(fullDataBlock) + range.offset;
+		vkCmdPushConstants(cmdBuf, m_pipelineLayout, range.stageFlags, range.offset, range.size, ptr);
+	}
 }
 
 void Shader::createPipelineLayout() {
@@ -240,6 +264,8 @@ void Shader::createPipelineLayout() {
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(m_descriptorSetLayouts.size());
 	pipelineLayoutInfo.pSetLayouts = m_descriptorSetLayouts.data();
+	pipelineLayoutInfo.pushConstantRangeCount = static_cast<uint32_t>(m_pushConstantRanges.size());
+	pipelineLayoutInfo.pPushConstantRanges = m_pushConstantRanges.data();
 
 	VK_CHECK(vkCreatePipelineLayout(Device::getHandle(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout));
 }

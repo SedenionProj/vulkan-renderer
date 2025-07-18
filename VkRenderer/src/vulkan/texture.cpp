@@ -198,7 +198,7 @@ Texture2D::Texture2D(std::filesystem::path path) {
 	m_type = TextureType::COLOR;
 	m_width = static_cast<uint32_t>(width);
 	m_height = static_cast<uint32_t>(height);
-	m_format = VK_FORMAT_R8G8B8A8_SRGB;
+	m_format = VK_FORMAT_R8G8B8A8_UNORM;
 	m_mipLevels = static_cast<uint32_t>(glm::floor(glm::log2(std::max(static_cast<float>(width), static_cast<float>(height))))) + 1;
 
 	VkDeviceSize imageSize = width * height * 4;
@@ -343,7 +343,7 @@ CubeMap::CubeMap(const char** paths) {
 		m_height = static_cast<uint32_t>(height);
 	}
 	m_layerCount = 6;
-	m_format = VK_FORMAT_R8G8B8A8_SRGB;
+	m_format = VK_FORMAT_R8G8B8A8_UNORM;
 
 	VkDeviceSize layerSize = m_width * m_height * 4;
 	VkDeviceSize imageSize = layerSize * m_layerCount;

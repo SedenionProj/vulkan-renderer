@@ -17,6 +17,7 @@ public:
 	void destroy();
 
 	VkShaderModule createShaderModule(const std::vector<char>& code);
+	void pushConstants(VkCommandBuffer cmdBuf, const void* fullDataBlock);
 
 	std::vector<VkVertexInputAttributeDescription>& getAttributeDescriptions() { return m_attributeDescriptions; }
 	std::vector<VkDescriptorSetLayout>& getDescriptorSetLayouts() { return m_descriptorSetLayouts; }
@@ -34,6 +35,7 @@ private:
 	std::vector<VkVertexInputAttributeDescription> m_attributeDescriptions{};
 	std::vector<VkDescriptorSetLayout> m_descriptorSetLayouts;	// one layout per set
 	std::vector<DescriptorInfo> m_descriptorInfos;
+	std::vector<VkPushConstantRange> m_pushConstantRanges;
 	uint32_t m_vertexInputStride = 0;
 
 	VkPipelineLayout m_pipelineLayout;

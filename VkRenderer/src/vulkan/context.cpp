@@ -30,6 +30,7 @@ Context::Context() {
 }
 
 Context::~Context() {
+	vkDestroyPipelineCache(Device::getHandle(), m_pipelineCache, nullptr);
 	m_device.reset();
 	if (enableValidationLayers) {
 		DestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
@@ -44,7 +45,14 @@ void Context::create()
 	if (s_context == nullptr) {
 		s_context = new Context();
 		s_context->m_device = std::make_shared<Device>();
+		s_context->createPipelineCache();
 	}
+}
+
+void Context::createPipelineCache() {
+	VkPipelineCacheCreateInfo pipelineCacheCreateInfo{};
+	pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+	VK_CHECK(vkCreatePipelineCache(Device::getHandle(), &pipelineCacheCreateInfo, nullptr, &m_pipelineCache));
 }
 
 void Context::createInstance() {

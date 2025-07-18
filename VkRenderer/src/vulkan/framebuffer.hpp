@@ -9,5 +9,5 @@ public:
 	VkFramebuffer getHandle() const { return m_handle; }
 
 private:
-	VkFramebuffer m_handle;
+	VkFramebuffer m_handle; // todo VkFramebuffer m_handle[MAX_FRAMES_IN_FLIGHT];
 };

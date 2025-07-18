@@ -14,21 +14,24 @@ Pipeline::Pipeline(const PipelineDesc& info)
 
 	VkSampleCountFlagBits sampleCount = info.sampleCount;
 
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		std::vector<std::shared_ptr<Texture>> textures;
+	if (info.createFramebuffers) {
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			std::vector<std::shared_ptr<Texture>> textures;
 
-		for (auto& attachmentInfo : info.attachmentInfos) {
-			if (attachmentInfo.texture->getType() == TextureType::SWAPCHAIN && info.swapchain != nullptr) {
-				textures.emplace_back(info.swapchain->m_swapchainTextures[i]);
-			} else {
-				textures.emplace_back(attachmentInfo.texture);
+			for (auto& attachmentInfo : info.attachmentInfos) {
+				if (attachmentInfo.texture->getType() == TextureType::SWAPCHAIN && info.swapchain != nullptr) {
+					textures.emplace_back(info.swapchain->m_swapchainTextures[i]);
+				}
+				else {
+					textures.emplace_back(attachmentInfo.texture);
+				}
 			}
-		}
 
-		m_framebuffers.emplace_back(std::make_shared<Framebuffer>(
-			textures,
-			m_renderPass
-		));
+			m_framebuffers.emplace_back(std::make_shared<Framebuffer>(
+				textures,
+				m_renderPass
+			));
+		}
 	}
 
 	std::vector<VkDynamicState> dynamicStates = {
@@ -135,7 +138,7 @@ Pipeline::Pipeline(const PipelineDesc& info)
 	pipelineInfo.layout = m_pipelineLayout;
 	pipelineInfo.renderPass = m_renderPass->getHandle();
 	pipelineInfo.subpass = 0;
-	VK_CHECK(vkCreateGraphicsPipelines(Device::getHandle(), VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_handle));
+	VK_CHECK(vkCreateGraphicsPipelines(Device::getHandle(), Context::get()->getPipelineCache(), 1, &pipelineInfo, nullptr, &m_handle));
 
 	//m_shader->destroy();
 }

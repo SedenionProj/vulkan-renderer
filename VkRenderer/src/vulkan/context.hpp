@@ -13,6 +13,7 @@ public:
 	static Context* get() { return s_context; }
 	VkInstance getInstance() const { return m_instance; }
 	std::shared_ptr<Device> getDevice() const { return m_device; }
+	VkPipelineCache getPipelineCache() const { return m_pipelineCache; }
 
 private:
 	Context();
@@ -21,6 +22,7 @@ private:
 	bool checkValidationLayerSupport();
 	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
 	void setupDebugMessenger();
+	void createPipelineCache();
 	std::vector<const char*> getRequiredExtensions();
 
 private:
@@ -29,8 +31,8 @@ private:
 	};
 
 	VkInstance m_instance;
-
 	VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
+	VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
 
 	std::shared_ptr<Device> m_device;
 	static Context* s_context;

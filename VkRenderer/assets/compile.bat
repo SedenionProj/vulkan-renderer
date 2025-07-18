@@ -16,5 +16,9 @@ C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag ssao.frag -o ssaoFrag.s
 
 C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert screen.vert -o screenVert.spv
 
+C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag bloom.frag -o bloomFrag.spv
+
+C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag toneMapping.frag -o toneMappingFrag.spv
+
 
 pause

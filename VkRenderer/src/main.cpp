@@ -25,7 +25,7 @@ class Renderer {
 public:
 	void run() {
 		initVulkan();
-		m_gui = std::make_shared<Gui>(m_window);
+		//m_gui = std::make_shared<Gui>(m_window);
 		mainLoop();
 	}
 
@@ -57,7 +57,7 @@ private:
 		m_depthPrePass.descriptorSet->setUniform(m_transformUBO, 0);
 
 		// ssao
-		m_ssaoPass.texture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
+		m_ssaoPass.texture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_1_BIT);
 		m_ssaoPass.texture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -89,7 +89,7 @@ private:
 		glm::vec3 lightDir = glm::normalize(glm::vec3(0.5f, -1.0f, 0.2f));
 		glm::vec3 lightPos = -lightDir * 25.0f;
 		m_shadowData.lightPos = lightPos;
-		
+
 		m_shadowData.lightView = glm::lookAt(
 			lightPos,
 			glm::vec3(0.0f),
@@ -113,13 +113,13 @@ private:
 		// scene
 		m_sceneData.depthTexture = std::make_shared<DepthTexture>(1280, 720, VK_SAMPLE_COUNT_8_BIT);
 
-		m_sceneData.colorTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_8_BIT);
+		m_sceneData.colorTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_8_BIT);
 		m_sceneData.colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 		m_sceneData.colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 
-		m_sceneData.resolveTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, m_window->getSwapchain()->m_swapchainImageFormat, VK_SAMPLE_COUNT_1_BIT);
+		m_sceneData.resolveTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_1_BIT);
 		m_sceneData.resolveTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -169,18 +169,79 @@ private:
 		m_skyBoxData.descriptorSet->setUniform(m_transformUBO, 0);
 		m_skyBoxData.descriptorSet->setTexture(m_skyBoxData.cubeMap, 1);
 
+		// bloom
+		float mutl = 1;
+		for (int i = 0; i < mipChainLength; i++) {
+			m_bloomData.mipChain[i] = std::make_shared<Texture2D>(TextureType::COLOR, 1280 * mutl, 720 * mutl, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_1_BIT);
+			m_bloomData.mipChain[i]->createImage(VK_IMAGE_TILING_OPTIMAL,
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+			m_bloomData.mipChain[i]->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+			m_bloomData.mipChain[i]->createSampler();
+
+			mutl *= 0.5f;
+		}
+
+		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "bloomFrag.spv");
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+		pipelineDesc.clear = true; // ?
+		pipelineDesc.attachmentInfos = { { m_bloomData.mipChain[0] } };
+		pipelineDesc.swapchain = nullptr;
+		pipelineDesc.createFramebuffers = false;
+
+		m_bloomData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
+
+		for (int i = 0; i < mipChainLength; i++) {
+			for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++) {
+				m_bloomData.framebuffers[j][i] = std::make_shared<Framebuffer>(
+					std::vector<std::shared_ptr<Texture>>{ m_bloomData.mipChain[i] },
+					m_bloomData.pipeline->getRenderPass()
+				);
+			}
+		}
+
+		for (int i = 0; i<mipChainLength+1; i++) {	// +1 counting resolve
+			m_bloomData.descriptorSets[i] = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+			if (i == 0) {
+				m_bloomData.descriptorSets[i]->setTexture(m_sceneData.resolveTexture, 0);
+			} else {
+				m_bloomData.descriptorSets[i]->setTexture(m_bloomData.mipChain[i-1], 0);
+			}
+
+		}
+		// tone mapping
+		m_toneMappingData.texture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B8G8R8A8_UNORM, VK_SAMPLE_COUNT_1_BIT);
+		m_toneMappingData.texture->createImage(VK_IMAGE_TILING_OPTIMAL,
+			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		m_toneMappingData.texture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+		m_toneMappingData.texture->createSampler();
+
+		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "toneMappingFrag.spv");
+		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
+		pipelineDesc.clear = true;
+		pipelineDesc.attachmentInfos = { { m_toneMappingData.texture } };
+		pipelineDesc.swapchain = nullptr;
+		pipelineDesc.createFramebuffers = true;
+		m_toneMappingData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
+		
+		m_toneMappingData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+		m_toneMappingData.descriptorSet->setTexture(m_sceneData.resolveTexture, 0);
+		m_toneMappingData.descriptorSet->setTexture(m_bloomData.mipChain[0], 1);
+
 		// post process
 		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "postProcessFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_window->getSwapchain()->m_swapchainTextures[0] } };
 		pipelineDesc.swapchain = m_window->getSwapchain();
+		pipelineDesc.createFramebuffers = true;
 
 		m_postProcessData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 		m_postProcessData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
-		m_postProcessData.descriptorSet->setTexture(m_sceneData.resolveTexture, 0);
+		m_postProcessData.descriptorSet->setTexture(m_toneMappingData.texture, 0);
 	}
-	
+
 	void updateUniformBuffer(uint32_t currentImage) {
 		static auto lastTime = std::chrono::high_resolution_clock::now();
 
@@ -192,7 +253,7 @@ private:
 
 		// Static camera state
 		static glm::vec3 cameraPos = glm::vec3(0.0f, 10.0f, 0.0f);
-		static float yaw = -90.0f; 
+		static float yaw = -90.0f;
 		static float pitch = 0.0f;
 		static float speed = 1.0f;
 		static float sensitivity = 0.5f;
@@ -245,7 +306,7 @@ private:
 		ubo.view = glm::lookAt(cameraPos, cameraPos + front, up);
 		ubo.proj = glm::perspective(glm::radians(90.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
 		ubo.proj[1][1] *= -1;
-		ubo.camPos = glm::vec4(cameraPos,1);
+		ubo.camPos = glm::vec4(cameraPos, 1);
 		ubo.lightSpace = m_shadowData.lightSpace;
 
 		m_transformUBO[currentImage].setData(&ubo, sizeof(ubo));
@@ -257,7 +318,7 @@ private:
 		updateUniformBuffer(swapchain->getCurrentFrameIndex());
 
 		// begin
-		m_gui->begin();
+		//m_gui->begin();
 		commandBuffer->getFence()->wait();
 		swapchain->acquireNexImage();
 		commandBuffer->reset();
@@ -282,7 +343,7 @@ private:
 
 		commandBuffer->endRenderPass();
 
-		// ssao
+		// ssao pass
 		commandBuffer->beginRenderpass(m_ssaoPass.pipeline->getRenderPass(), m_ssaoPass.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_ssaoPass.pipeline);
 
@@ -332,8 +393,8 @@ private:
 		}
 
 		commandBuffer->endRenderPass();
-		
-		// sky box
+
+		// sky box pass
 		commandBuffer->beginRenderpass(m_skyBoxData.pipeline->getRenderPass(), m_skyBoxData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_skyBoxData.pipeline);
 		commandBuffer->updateViewport(1280, 720);
@@ -344,22 +405,73 @@ private:
 
 		commandBuffer->endRenderPass();
 
+		// bloom downsample
+		for (int i = 0; i < mipChainLength; i++) {
+			auto& mip = m_bloomData.mipChain[i];
+			commandBuffer->beginRenderpass(m_bloomData.pipeline->getRenderPass(), m_bloomData.framebuffers[swapchain->getCurrentFrameIndex()][i], mip->getWidth(), mip->getHeight());
+			commandBuffer->bindPipeline(m_bloomData.pipeline);
+			commandBuffer->updateViewport(mip->getWidth(), mip->getHeight());
+
+			VkDescriptorSet bloomDescriptorSet = m_bloomData.descriptorSets[i]->getHandle(swapchain->getCurrentFrameIndex());
+			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_bloomData.descriptorSets[i]->getShader()->getPipelineLayout(), 0, 1, &bloomDescriptorSet, 0, nullptr);
+			if(i == 0)
+				m_bloomData.pushConstant.mode = 0;
+			else
+				m_bloomData.pushConstant.mode = 1;
+			m_bloomData.pushConstant.mipLevel = i-1;
+			m_bloomData.pushConstant.resolution = glm::vec2(mip->getWidth(), mip->getHeight());
+			m_bloomData.descriptorSets[0]->getShader()->pushConstants(commandBuffer->getHandle(), &m_bloomData.pushConstant);
+
+			vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
+
+			commandBuffer->endRenderPass();
+		}
+
+		// bloom upsample
+		for (int i = mipChainLength; i > 1; i--) {
+			auto& mip = m_bloomData.mipChain[i - 2];
+			commandBuffer->beginRenderpass(m_bloomData.pipeline->getRenderPass(), m_bloomData.framebuffers[swapchain->getCurrentFrameIndex()][i-2], mip->getWidth(), mip->getHeight());
+			commandBuffer->bindPipeline(m_bloomData.pipeline);
+			commandBuffer->updateViewport(mip->getWidth(), mip->getHeight());
+
+			VkDescriptorSet bloomDescriptorSet = m_bloomData.descriptorSets[i]->getHandle(swapchain->getCurrentFrameIndex());
+			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_bloomData.descriptorSets[i]->getShader()->getPipelineLayout(), 0, 1, &bloomDescriptorSet, 0, nullptr);
+			m_bloomData.pushConstant.mode = 2;
+			m_bloomData.pushConstant.mipLevel = i;
+			m_bloomData.pushConstant.resolution = glm::vec2(mip->getWidth(), mip->getHeight());
+			m_bloomData.descriptorSets[0]->getShader()->pushConstants(commandBuffer->getHandle(), &m_bloomData.pushConstant);
+
+			vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
+
+			commandBuffer->endRenderPass();
+		}
+		// tone mapping pass
+		commandBuffer->beginRenderpass(m_toneMappingData.pipeline->getRenderPass(), m_toneMappingData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->bindPipeline(m_toneMappingData.pipeline);
+		commandBuffer->updateViewport(1280, 720);
+		VkDescriptorSet toneMappingDescriptorSet = m_toneMappingData.descriptorSet->getHandle(swapchain->getCurrentFrameIndex());
+		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_toneMappingData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &toneMappingDescriptorSet, 0, nullptr); // todo: abstract these
+
+		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
+		commandBuffer->endRenderPass();
+
 		// ImGui rendering
-		ImGui::Begin("debug");
-		ImGui::Text("fps: %.1f", 1.f/m_deltaTime);
-		ImGui::End();
+		//ImGui::Begin("debug");
+		//ImGui::Text("fps: %.1f", 1.f / m_deltaTime);
+		//ImGui::End();
 
 		// post processing pass
 		commandBuffer->beginRenderpass(m_postProcessData.pipeline->getRenderPass(), m_postProcessData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_postProcessData.pipeline);
-		
+		commandBuffer->updateViewport(1280, 720);
+
 		VkDescriptorSet postProcessDescriptorSet = m_postProcessData.descriptorSet->getHandle(swapchain->getCurrentFrameIndex());
 		vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_postProcessData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, &postProcessDescriptorSet, 0, nullptr); // todo: abstract these
 
 		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
 
-		ImGui::Render();
-		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer->getHandle());
+		//ImGui::Render();
+		//ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer->getHandle());
 
 		commandBuffer->endRenderPass();
 
@@ -373,7 +485,7 @@ private:
 		while (!glfwWindowShouldClose(m_window->getHandle())) {
 			glfwPollEvents();
 
-			
+
 			drawFrame();
 		}
 
@@ -425,6 +537,7 @@ private:
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
 	};
+
 	struct ShadowData {
 		std::shared_ptr<Texture2D> texture;
 		std::shared_ptr<Pipeline> pipeline;
@@ -435,13 +548,35 @@ private:
 		glm::mat4 lightProjection;
 		glm::mat4 lightView;
 	};
-	
+
+	static const uint32_t mipChainLength = 5;
+	struct BloomData {
+		struct PushConstant {
+			int mode;
+			int mipLevel;
+			glm::vec2 resolution;
+		};
+		PushConstant pushConstant;
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<Framebuffer> framebuffers[MAX_FRAMES_IN_FLIGHT][mipChainLength];
+		std::shared_ptr<Texture2D> mipChain[mipChainLength];
+		std::shared_ptr<DescriptorSet> descriptorSets[mipChainLength+1];
+	};
+
+	struct ToneMappingData {
+		std::shared_ptr<Texture2D> texture;
+		std::shared_ptr<Pipeline> pipeline;
+		std::shared_ptr<DescriptorSet> descriptorSet;
+	};
+
 	PostProcessData m_postProcessData;
 	SceneData m_sceneData;
 	SkyBoxData m_skyBoxData;
 	ShadowData m_shadowData;
 	DepthPrePass m_depthPrePass;
 	SSAOPass m_ssaoPass;
+	BloomData m_bloomData;
+	ToneMappingData m_toneMappingData;
 
 	float m_deltaTime = 0.0f;
 };

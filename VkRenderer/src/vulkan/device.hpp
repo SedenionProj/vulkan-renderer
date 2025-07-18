@@ -63,6 +63,7 @@ private:
 	VkDevice m_handle;
 	VkQueue m_graphicsQueue;
 	VkQueue m_presentQueue;
+	VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
 
 	PhysicalDevice m_physicalDevice;
 };
