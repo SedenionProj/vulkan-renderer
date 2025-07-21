@@ -1,24 +1,33 @@
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert basic.vert -o basicVert.spv
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag basic.frag -o basicFrag.spv
+@echo off
+setlocal enabledelayedexpansion
 
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag postProcess.frag -o postProcessFrag.spv
+set GLSLC=C:\VulkanSDK\1.4.313.0\Bin\glslc.exe
+set OUTPUT_DIR=spv
 
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert cubemap.vert -o cubemapVert.spv
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag cubemap.frag -o cubemapFrag.spv
+if not exist "%OUTPUT_DIR%" (
+    mkdir "%OUTPUT_DIR%"
+    echo Created folder: %OUTPUT_DIR%
+)
 
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert shadowMap.vert -o shadowMapVert.spv
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag shadowMap.frag -o shadowMapFrag.spv
+echo Starting shader compilation...
+echo -------------------------------
 
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert depthPrePass.vert -o depthPrePassVert.spv
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag depthPrePass.frag -o depthPrePassFrag.spv
+for %%f in (*.vert *.frag) do (
+    set "name=%%~nf"
+    set "ext=%%~xf"
+    
+    if "%%~xf"==".vert" (
+        set "stage=vert"
+        set "suffix=Vert.spv"
+    ) else if "%%~xf"==".frag" (
+        set "stage=frag"
+        set "suffix=Frag.spv"
+    )
+    
+    echo Compiling %%f to %OUTPUT_DIR%\!name!!suffix!
+    "%GLSLC%" -fshader-stage=!stage! -I . "%%f" -o "%OUTPUT_DIR%\!name!!suffix!"
+)
 
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag ssao.frag -o ssaoFrag.spv
-
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=vert screen.vert -o screenVert.spv
-
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag bloom.frag -o bloomFrag.spv
-
-C:/VulkanSDK/1.4.313.0/Bin/glslc.exe -fshader-stage=frag toneMapping.frag -o toneMappingFrag.spv
-
-
+echo -------------------------------
+echo Compilation complete
 pause

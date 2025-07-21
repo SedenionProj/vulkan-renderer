@@ -25,7 +25,10 @@ public:
 
 class Model {
 public:
+	Model() = default;
 	Model(std::filesystem::path filePath);
+	void createCube();
 
 	std::vector<std::shared_ptr<Mesh>> m_meshes;
+	glm::mat4 m_modelMatrix = glm::mat4(1.0f);
 };

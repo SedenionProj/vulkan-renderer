@@ -163,14 +163,13 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 	// uniform data
 	for (auto& uniform : resources.uniform_buffers) {
 		uint32_t binding = comp.get_decoration(uniform.id, spv::DecorationBinding);
-
-		uint32_t targetBinding = binding;
+		uint32_t set = comp.get_decoration(uniform.id, spv::DecorationDescriptorSet);
 
 		auto it = std::find_if(
 			m_descriptorInfos.begin(),
 			m_descriptorInfos.end(),
-			[targetBinding](const DescriptorInfo& info) {
-				return info.binding == targetBinding;
+			[&](const DescriptorInfo& info) {
+				return info.binding == binding && info.set == set;
 			}
 		);
 
@@ -186,7 +185,7 @@ void Shader::loadData(std::vector<char>& code, VkShaderStageFlags stage)
 			stage,
 			(uint32_t)bufferSize,
 			binding,
-			comp.get_decoration(uniform.id, spv::DecorationDescriptorSet),
+			set
 			});
 		}
 	}

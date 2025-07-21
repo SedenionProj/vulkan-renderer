@@ -27,5 +27,6 @@ void main() {
 	vec3 bloom = texture(u_bloomTexture, fragUV).rgb;
 	vec3 result = scene + bloom;
 	result = ACESTonemap(result);
-	outColor = vec4(scene, 1.0);
+	result = pow(result, vec3(1.0 / 2.2));
+	outColor = vec4(result, 1.0);
 }

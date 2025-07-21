@@ -97,54 +97,92 @@ float getShadow(vec4 fragPosLightSpace, vec3 n) {
     return shadow;
 }
 
-
 float getSSAO(vec2 uv) {
     return texture(u_ssaoMap, uv).r;
 }
 
+float distributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness*roughness;
+    float a2 = a*a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH*NdotH;
+
+    float nom   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    denom = PI * denom * denom;
+
+    return nom / denom;
+}
+
+float geometrySchlickGGX(float NdotV, float roughness) {
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float nom   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+}
+
+float geometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    float ggx2 = geometrySchlickGGX(NdotV, roughness);
+    float ggx1 = geometrySchlickGGX(NdotL, roughness);
+
+    return ggx1 * ggx2;
+}
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+
+
 void main() {
-    vec3 n = getNormal();
-    vec3 viewDir = normalize(u_scene.camPos.rgb - data.fragPos);
+    vec3 N = getNormal();
+    vec3 V = normalize(u_scene.camPos.xyz - data.fragPos);
     
-    // === Material Parameters ===
     vec3 albedo = getAlbedo();
-    vec3 specularColor = getSpecular();
-    float shininess = 64.0;
+    vec3 metallic = getSpecular();
+    float roughness = 0.1;
     
-    // === Ambient Lighting ===
-    float ambientStrength = 0.3;
-    vec3 ambient = ambientStrength * albedo;
+    vec3 F0 = vec3(0.04);
+    F0 = mix(F0, albedo, metallic.x);
     
-    vec3 lighting = ambient;
-    
+    vec3 Lo = vec3(0);
     for (int i = 0; i < u_scene.lightCount; i++) {
-        if (i >= int(u_scene.lightCount)) break;
-        
         Light light = u_scene.lights[i];
-        vec3 lightDir = normalize(light.position.rgb - data.fragPos);
-        vec3 lightColor = light.color.rgb;
-        float lightIntensity = light.color.a;
+
+        vec3 L = normalize(light.position.xyz - data.fragPos);
+        vec3 H = normalize(L + V);
+        float dist = length(light.position.xyz - data.fragPos);
+        float attenuation = 1.0 / (dist*dist);
+        vec3 radiance = light.color.rgb * attenuation;
+
+        // === Cook-Torrance BRDF ===
+        float NDF = distributionGGX(N, H, roughness);
+        float G = geometrySmith(N, V, L, roughness);      
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 numerator    = NDF * G * F; 
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
         
-        // === Diffuse ===
-        float diff = max(dot(n, lightDir), 0.0);
-        vec3 diffuse = diff * albedo * lightColor;
-        
-        // === Specular ===
-        vec3 halfDir = normalize(lightDir + viewDir);
-        float specAngle = max(dot(n, halfDir), 0.0);
-        float spec = min(pow(specAngle, shininess)*4., 10.);
-        vec3 specular = spec * specularColor * lightColor;
-        
-        lighting += (diffuse + specular) * lightIntensity;
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic.x;	  
+
+        float NdotL = max(dot(N, L), 0.0);        
+
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
     
-    // === Shadows and SSAO ===
-    float shadow = getShadow(data.fragPosLightSpace, n);          
+    float shadow = (1.0 - getShadow(data.fragPosLightSpace, N)*0.75);          
     float ssao = getSSAO(gl_FragCoord.xy / vec2(1280.0, 720.0));  
     
-    // Apply shadows and SSAO
-    lighting *= (1.0 - shadow * 0.75);
-    lighting *= ssao * 1.5;
+    vec3 ambient = vec3(0.03) * albedo * ssao;
+    vec3 color = ambient + Lo;
     
-    outColor = vec4(lighting, 1.0);
+    outColor = vec4(color*shadow, 1.0);
 }

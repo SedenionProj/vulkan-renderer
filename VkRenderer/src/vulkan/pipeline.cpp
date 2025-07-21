@@ -10,9 +10,10 @@ Pipeline::Pipeline(const PipelineDesc& info)
 	: m_shader(info.shader) {
 	m_pipelineLayout = m_shader->getPipelineLayout();
 
-	m_renderPass = std::make_shared<RenderPass>(info.attachmentInfos, info.clear);
+	m_renderPass = std::make_shared<RenderPass>(info.attachmentInfos, info.clear, info.clearColor);
 
 	VkSampleCountFlagBits sampleCount = info.sampleCount;
+	bool hasDepth = false;
 
 	if (info.createFramebuffers) {
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -21,9 +22,12 @@ Pipeline::Pipeline(const PipelineDesc& info)
 			for (auto& attachmentInfo : info.attachmentInfos) {
 				if (attachmentInfo.texture->getType() == TextureType::SWAPCHAIN && info.swapchain != nullptr) {
 					textures.emplace_back(info.swapchain->m_swapchainTextures[i]);
-				}
+				} 
 				else {
 					textures.emplace_back(attachmentInfo.texture);
+				}
+				if (attachmentInfo.texture->getType() == TextureType::DEPTH) {
+					hasDepth = true;
 				}
 			}
 
@@ -93,12 +97,30 @@ Pipeline::Pipeline(const PipelineDesc& info)
 	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
 	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	colorBlendAttachment.blendEnable = VK_TRUE;
-	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+	switch (info.blendMode) {
+		case BlendMode::NONE:
+			colorBlendAttachment.blendEnable = VK_FALSE;
+			break;
+		case BlendMode::DEFAULT:
+			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			break;
+		case BlendMode::ADDITIVE:
+			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			break;
+		default:
+			break;
+	}
 
 	VkPipelineColorBlendStateCreateInfo colorBlending{};
 	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -113,9 +135,14 @@ Pipeline::Pipeline(const PipelineDesc& info)
 
 	VkPipelineDepthStencilStateCreateInfo depthStencil{};
 	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-	depthStencil.depthTestEnable = VK_TRUE;
-	depthStencil.depthWriteEnable = VK_TRUE;
-	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	if (hasDepth) {
+		depthStencil.depthTestEnable = VK_TRUE;
+		depthStencil.depthWriteEnable = VK_TRUE;
+		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	} else {
+		depthStencil.depthTestEnable = VK_FALSE;
+		depthStencil.depthWriteEnable = VK_FALSE;
+	}
 	depthStencil.depthBoundsTestEnable = VK_FALSE;
 	depthStencil.minDepthBounds = 0.0f; // Optional
 	depthStencil.maxDepthBounds = 1.0f; // Optional

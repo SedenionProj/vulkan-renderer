@@ -1,5 +1,7 @@
 #version 450
 
+#include "sceneData.glsl"
+
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec2 inTexCoord;
@@ -15,23 +17,19 @@ layout(location = 0) out VertexData{
     vec4 fragPosLightSpace;
 } data;
 
-layout(set = 0, binding = 0) uniform UniformBufferObject {
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-    mat4 lightSpace;
-    vec4 camPos;
-} ubo;
+layout(push_constant) uniform push {
+	mat4 model;
+} transform;
 
 void main() {
-    mat3 normalMatrix = transpose(inverse(mat3(ubo.model)));
+    mat3 normalMatrix = transpose(inverse(mat3(transform.model)));
 
-    data.fragPos = vec3(ubo.model * vec4(inPosition, 1.0));
+    data.fragPos = vec3(transform.model * vec4(inPosition, 1.0));
     data.normal = normalize(normalMatrix * inNormal);
     data.tangent = normalize(normalMatrix * inTangent);
     data.bitangent = normalize(normalMatrix * inBitangent);
-    data.fragPosLightSpace = ubo.lightSpace * vec4(data.fragPos, 1.0);
+    data.fragPosLightSpace = u_scene.lightSpace * vec4(data.fragPos, 1.0);
     data.texCoord = inTexCoord;
 
-    gl_Position = ubo.proj * ubo.view * vec4(data.fragPos, 1.0);
+    gl_Position = u_scene.proj * u_scene.view * vec4(data.fragPos, 1.0);
 }

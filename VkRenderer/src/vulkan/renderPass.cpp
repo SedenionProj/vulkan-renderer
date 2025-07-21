@@ -2,7 +2,7 @@
 #include "src/vulkan/device.hpp"
 #include "src/vulkan/texture.hpp"
 
-RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool clear) {
+RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool clear, glm::vec4 clearColor) {
 	std::vector<VkAttachmentDescription> attachmentDescriptions;
 	attachmentDescriptions.reserve(attachmentInfos.size());
 
@@ -40,11 +40,11 @@ RenderPass::RenderPass(std::initializer_list<Attachment> attachmentInfos, bool c
 			break;
 		}
 
-		if (clear) {
+		if (clear) {	// todo: clear per attachment
 			if (tex->getType() == TextureType::DEPTH)
 				m_clearValues.push_back({ 1.,0.});
 			else
-				m_clearValues.push_back({ 0.1,0.1,0.1,0.1 });
+				m_clearValues.push_back({ clearColor.x, clearColor.y, clearColor.z, clearColor.w });
 			desc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		} else {
 			desc.initialLayout = desc.finalLayout;

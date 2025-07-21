@@ -8,7 +8,7 @@ struct Attachment {
 
 class RenderPass {
 public:
-	RenderPass(std::initializer_list<Attachment> attachmentInfos, bool clear);
+	RenderPass(std::initializer_list<Attachment> attachmentInfos, bool clear, glm::vec4 clearColor);
 	~RenderPass();
 
 	VkRenderPass getHandle() const { return m_handle; }

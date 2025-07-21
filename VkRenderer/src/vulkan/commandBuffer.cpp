@@ -66,22 +66,6 @@ void CommandBuffer::beginRenderpass(std::shared_ptr<RenderPass> renderPass, std:
 
 }
 
-void CommandBuffer::beginRenderpass(VkRenderPass renderPass, std::shared_ptr<Framebuffer> framebuffer, uint32_t width, uint32_t height)
-{
-	VkClearValue clearValues = {0.1,0.1,0.1,1.};
-	
-	VkRenderPassBeginInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = renderPass;
-	renderPassInfo.framebuffer = framebuffer->getHandle();
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = { width, height };
-	renderPassInfo.clearValueCount = 1;
-	renderPassInfo.pClearValues = &clearValues;
-	
-	vkCmdBeginRenderPass(m_handle, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-}
-
 void CommandBuffer::endRecording()
 {
 	VK_CHECK(vkEndCommandBuffer(m_handle));

@@ -17,8 +17,9 @@ public:
 
 	void createImage(VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties);
 	void createImageView(VkImageAspectFlags aspectFlags);
-	void transitionImageLayout(VkImageLayout newLayout);
-	void createSampler();
+	void transitionImageLayout(VkImageLayout oldLayout, VkImageLayout newLayout);
+	void createSampler(VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT);
+	void clear(VkClearColorValue clearColor);
 protected:
 	void copyBufferToImage(VkBuffer buffer, uint32_t width, uint32_t height);
 
@@ -42,7 +43,8 @@ public:
 	Texture2D(TextureType type, VkImage image, VkImageView imageView, uint32_t width, uint32_t height, VkFormat format);
 	Texture2D(std::filesystem::path path);
 	Texture2D(TextureType type, uint32_t width, uint32_t height, VkFormat format, VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT);
-	
+	Texture2D(const void* pixels, uint32_t width, uint32_t height);
+
 	void generateMipmaps();
 };
 

@@ -2,13 +2,21 @@
 #include "src/vulkan/vkHeader.hpp"
 #include "renderPass.hpp"
 
+enum class BlendMode {
+	NONE = 1,
+	DEFAULT,
+	ADDITIVE
+};
+
 struct PipelineDesc {
 	std::shared_ptr<Shader> shader;
 	std::initializer_list<Attachment> attachmentInfos;
 	std::shared_ptr<Swapchain> swapchain = nullptr;
 	VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 	bool clear = true;
+	glm::vec4 clearColor = glm::vec4(0);
 	bool createFramebuffers = true;
+	BlendMode blendMode = BlendMode::DEFAULT;
 };
 
 class Pipeline {

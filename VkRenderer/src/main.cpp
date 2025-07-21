@@ -24,28 +24,26 @@ class Renderer {
 
 public:
 	void run() {
-		initVulkan();
+		m_window = std::make_shared<Window>();
+		init();
 		//m_gui = std::make_shared<Gui>(m_window);
 		mainLoop();
 	}
 
 private:
-	void initVulkan() {
-		m_window = std::make_shared<Window>();
-
+	void init() {
 		PipelineDesc pipelineDesc{};
 
-		// UBO
-		m_transformUBO.reserve(MAX_FRAMES_IN_FLIGHT);
+		// init scene data
+		m_sceneUBO.reserve(MAX_FRAMES_IN_FLIGHT);
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-			m_transformUBO.emplace_back((uint32_t)sizeof(UniformBufferObject));
+			m_sceneUBO.emplace_back((uint32_t)sizeof(SceneDataUBO));
 		}
-
 		// depth pre-pass
 		m_depthPrePass.texture = std::make_shared<DepthTexture>(1280, 720, VK_SAMPLE_COUNT_1_BIT);
 		m_depthPrePass.texture->createSampler();
 
-		pipelineDesc.shader = std::make_shared<Shader>("depthPrePassVert.spv", "depthPrePassFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/depthPrePassVert.spv", "spv/depthPrePassFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_depthPrePass.texture } };
@@ -54,7 +52,7 @@ private:
 		m_depthPrePass.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
 		m_depthPrePass.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
-		m_depthPrePass.descriptorSet->setUniform(m_transformUBO, 0);
+		m_depthPrePass.descriptorSet->setUniform(m_sceneUBO, 0);
 
 		// ssao
 		m_ssaoPass.texture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_1_BIT);
@@ -64,7 +62,7 @@ private:
 		m_ssaoPass.texture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 		m_ssaoPass.texture->createSampler();
 
-		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "ssaoFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/screenVert.spv", "spv/ssaoFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_ssaoPass.texture } };
@@ -72,7 +70,7 @@ private:
 		m_ssaoPass.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
 		m_ssaoPass.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
-		m_ssaoPass.descriptorSet->setUniform(m_transformUBO, 0);
+		m_ssaoPass.descriptorSet->setUniform(m_sceneUBO, 0);
 		m_ssaoPass.descriptorSet->setTexture(m_depthPrePass.texture, 1);
 
 		// shadow
@@ -100,7 +98,7 @@ private:
 		m_shadowData.texture = std::make_shared<DepthTexture>(m_shadowData.resolution, m_shadowData.resolution);
 		m_shadowData.texture->createSampler();
 
-		pipelineDesc.shader = std::make_shared<Shader>("shadowMapVert.spv", "shadowMapFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/shadowMapVert.spv", "spv/shadowMapFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_shadowData.texture } };
@@ -109,42 +107,47 @@ private:
 		m_shadowData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
 		m_shadowData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
-		m_shadowData.descriptorSet->setUniform(m_transformUBO, 0);
-		// scene
-		m_sceneData.depthTexture = std::make_shared<DepthTexture>(1280, 720, VK_SAMPLE_COUNT_8_BIT);
+		m_shadowData.descriptorSet->setUniform(m_sceneUBO, 0);
+		// forward scene
+		m_forwardData.shader = std::make_shared<Shader>("spv/basicVert.spv", "spv/pbrFrag.spv");
 
-		m_sceneData.colorTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_8_BIT);
-		m_sceneData.colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
+		m_forwardData.depthTexture = std::make_shared<DepthTexture>(1280, 720, VK_SAMPLE_COUNT_8_BIT);
+
+		m_forwardData.colorTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_8_BIT);
+		m_forwardData.colorTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		m_sceneData.colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+		m_forwardData.colorTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 
-		m_sceneData.resolveTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_1_BIT);
-		m_sceneData.resolveTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
+		m_forwardData.resolveTexture = std::make_shared<Texture2D>(TextureType::COLOR, 1280, 720, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_1_BIT);
+		m_forwardData.resolveTexture->createImage(VK_IMAGE_TILING_OPTIMAL,
 			VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-		m_sceneData.resolveTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
-		m_sceneData.resolveTexture->createSampler();
+		m_forwardData.resolveTexture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
+		m_forwardData.resolveTexture->createSampler();
 
-		m_sceneData.model = std::make_shared<Model>("models/sponza/sponza.obj");
-		pipelineDesc.shader = m_sceneData.model->m_meshes[1]->m_material->m_shader; // todo : asset manager
+		m_drawables.resize(2);
+		m_drawables[1] = std::make_shared<Model>("models/sponza/sponza.obj");
+		m_drawables[1]->m_modelMatrix = glm::scale(glm::mat4(1.f), glm::vec3(0.01f));
+
+		m_drawables[0] = std::make_shared<Model>();
+		m_drawables[0]->createCube();
+		m_drawables[0]->m_modelMatrix = glm::translate(glm::mat4(1.f), glm::vec3(0,10,0));
+
+		pipelineDesc.shader = m_forwardData.shader; // todo : asset manager
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = {
-			{ m_sceneData.colorTexture},
-			{ m_sceneData.depthTexture},
-			{ m_sceneData.resolveTexture, true} };
+			{ m_forwardData.colorTexture},
+			{ m_forwardData.depthTexture},
+			{ m_forwardData.resolveTexture, true} };
 
+		m_forwardData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
-		m_sceneData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
-
-		for (auto mesh : m_sceneData.model->m_meshes) {
-			if (mesh->m_material != nullptr) {
-				mesh->m_material->m_descriptorSet->setUniform(m_transformUBO, 0);
-				mesh->m_material->m_descriptorSet->setTexture(m_shadowData.texture, 5);
-				mesh->m_material->m_descriptorSet->setTexture(m_ssaoPass.texture, 6);
-			}
-		}
+		m_forwardData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
+		m_forwardData.descriptorSet->setUniform(m_sceneUBO, 0);
+		m_forwardData.descriptorSet->setTexture(m_shadowData.texture, 1);
+		m_forwardData.descriptorSet->setTexture(m_ssaoPass.texture, 2);
 
 		// cube map
 		const char* faces[6] = {
@@ -156,17 +159,17 @@ private:
 			"skybox/back.jpg"
 		};
 		m_skyBoxData.cubeMap = std::make_shared<CubeMap>(faces);
-		pipelineDesc.shader = std::make_shared<Shader>("cubemapVert.spv", "cubemapFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/cubemapVert.spv", "spv/cubemapFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
 		pipelineDesc.clear = false;
 		pipelineDesc.attachmentInfos = {
-			{ m_sceneData.colorTexture},
-			{ m_sceneData.depthTexture},
-			{ m_sceneData.resolveTexture, true} };
+			{ m_forwardData.colorTexture},
+			{ m_forwardData.depthTexture},
+			{ m_forwardData.resolveTexture, true} };
 
 		m_skyBoxData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 		m_skyBoxData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
-		m_skyBoxData.descriptorSet->setUniform(m_transformUBO, 0);
+		m_skyBoxData.descriptorSet->setUniform(m_sceneUBO, 0);
 		m_skyBoxData.descriptorSet->setTexture(m_skyBoxData.cubeMap, 1);
 
 		// bloom
@@ -174,21 +177,20 @@ private:
 		for (int i = 0; i < mipChainLength; i++) {
 			m_bloomData.mipChain[i] = std::make_shared<Texture2D>(TextureType::COLOR, 1280 * mutl, 720 * mutl, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_SAMPLE_COUNT_1_BIT);
 			m_bloomData.mipChain[i]->createImage(VK_IMAGE_TILING_OPTIMAL,
-				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+				VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 			m_bloomData.mipChain[i]->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
-			m_bloomData.mipChain[i]->createSampler();
-
+			m_bloomData.mipChain[i]->createSampler(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 			mutl *= 0.5f;
 		}
 
-		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "bloomFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/screenVert.spv", "spv/bloomFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true; // ?
 		pipelineDesc.attachmentInfos = { { m_bloomData.mipChain[0] } };
 		pipelineDesc.swapchain = nullptr;
 		pipelineDesc.createFramebuffers = false;
-
+		pipelineDesc.blendMode = BlendMode::DEFAULT;
 		m_bloomData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 
 		for (int i = 0; i < mipChainLength; i++) {
@@ -203,7 +205,7 @@ private:
 		for (int i = 0; i<mipChainLength+1; i++) {	// +1 counting resolve
 			m_bloomData.descriptorSets[i] = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
 			if (i == 0) {
-				m_bloomData.descriptorSets[i]->setTexture(m_sceneData.resolveTexture, 0);
+				m_bloomData.descriptorSets[i]->setTexture(m_forwardData.resolveTexture, 0);
 			} else {
 				m_bloomData.descriptorSets[i]->setTexture(m_bloomData.mipChain[i-1], 0);
 			}
@@ -217,20 +219,21 @@ private:
 		m_toneMappingData.texture->createImageView(VK_IMAGE_ASPECT_COLOR_BIT);
 		m_toneMappingData.texture->createSampler();
 
-		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "toneMappingFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/screenVert.spv", "spv/toneMappingFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_toneMappingData.texture } };
 		pipelineDesc.swapchain = nullptr;
 		pipelineDesc.createFramebuffers = true;
+		pipelineDesc.blendMode = BlendMode::DEFAULT;
 		m_toneMappingData.pipeline = std::make_shared<Pipeline>(pipelineDesc);
 		
 		m_toneMappingData.descriptorSet = std::make_shared<DescriptorSet>(pipelineDesc.shader, 0);
-		m_toneMappingData.descriptorSet->setTexture(m_sceneData.resolveTexture, 0);
+		m_toneMappingData.descriptorSet->setTexture(m_forwardData.resolveTexture, 0);
 		m_toneMappingData.descriptorSet->setTexture(m_bloomData.mipChain[0], 1);
 
 		// post process
-		pipelineDesc.shader = std::make_shared<Shader>("screenVert.spv", "postProcessFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/screenVert.spv", "spv/postProcessFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_1_BIT;
 		pipelineDesc.clear = true;
 		pipelineDesc.attachmentInfos = { { m_window->getSwapchain()->m_swapchainTextures[0] } };
@@ -252,7 +255,7 @@ private:
 		lastTime = currentTime;
 
 		// Static camera state
-		static glm::vec3 cameraPos = glm::vec3(0.0f, 10.0f, 0.0f);
+		static glm::vec3 cameraPos = glm::vec3(0.0f, 10.0f, 5.0f);
 		static float yaw = -90.0f;
 		static float pitch = 0.0f;
 		static float speed = 1.0f;
@@ -292,7 +295,7 @@ private:
 		glm::vec3 right = glm::normalize(glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f)));
 		glm::vec3 up = glm::normalize(glm::cross(right, front));
 
-		float deltaTime = 0.016f;
+		float deltaTime = m_deltaTime*10.f;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_W) == GLFW_PRESS) cameraPos += front * speed * deltaTime;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_S) == GLFW_PRESS) cameraPos -= front * speed * deltaTime;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_A) == GLFW_PRESS) cameraPos -= right * speed * deltaTime;
@@ -300,50 +303,42 @@ private:
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_SPACE) == GLFW_PRESS) cameraPos += up * speed * deltaTime;
 		if (glfwGetKey(m_window->getHandle(), GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) cameraPos -= up * speed * deltaTime;
 
-		UniformBufferObject ubo{};
-		ubo.model = glm::mat4(1.f);
-		ubo.model = glm::scale(ubo.model, glm::vec3(0.01f));
-		ubo.view = glm::lookAt(cameraPos, cameraPos + front, up);
-		ubo.proj = glm::perspective(glm::radians(90.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
-		ubo.proj[1][1] *= -1;
-		ubo.camPos = glm::vec4(cameraPos, 1);
-		ubo.lightSpace = m_shadowData.lightSpace;
+		m_sceneData.view = glm::lookAt(cameraPos, cameraPos + front, up);
+		m_sceneData.proj = glm::perspective(glm::radians(90.0f), 1280.0f / 720.0f, 0.1f, 100.0f);
+		m_sceneData.proj[1][1] *= -1;
+		m_sceneData.camPos = glm::vec4(cameraPos, 1);
+		m_sceneData.lightSpace = m_shadowData.lightSpace;
+		m_sceneData.lights[0].position = glm::vec4(m_shadowData.lightPos, 1.0f);
+		m_sceneData.lights[0].color = glm::vec4(1.0f, 1.0f, 1.0f, 0.0f)*1000.f;
+		m_sceneData.lights[1].position = glm::vec4(0,5,0, 1.0f);
+		m_sceneData.lights[1].color = glm::vec4(1.f,0.5f,0.85f,0.f)*500.f;
 
-		m_transformUBO[currentImage].setData(&ubo, sizeof(ubo));
+		m_sceneUBO[currentImage].setData(&m_sceneData, sizeof(m_sceneData));
 	}
 
-	void drawFrame() {
-		auto swapchain = m_window->getSwapchain();
-		auto commandBuffer = swapchain->getCurrentCommandBuffer();
-		updateUniformBuffer(swapchain->getCurrentFrameIndex());
-
-		// begin
-		//m_gui->begin();
-		commandBuffer->getFence()->wait();
-		swapchain->acquireNexImage();
-		commandBuffer->reset();
-		commandBuffer->beginRecording();
-
-		// depth pre-pass
+	void depthPrePass() {
 		commandBuffer->beginRenderpass(m_depthPrePass.pipeline->getRenderPass(), m_depthPrePass.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_depthPrePass.pipeline);
 		commandBuffer->updateViewport(1280, 720);
-		for (auto mesh : m_sceneData.model->m_meshes) {
-			if (mesh->m_material == nullptr)
-				continue;
+		for (auto& model : m_drawables) {
+			m_forwardData.shader->pushConstants(commandBuffer->getHandle(), &model->m_modelMatrix);
+			for (auto mesh : model->m_meshes) {
+				if (mesh->m_material == nullptr)
+					continue;
 
-			VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
-			VkDeviceSize offsets[] = { 0 };
-			VkDescriptorSet descriptorSets[] = { m_depthPrePass.descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
-			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_depthPrePass.descriptorSet->getShader()->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
-			vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+				VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
+				VkDeviceSize offsets[] = { 0 };
+				VkDescriptorSet descriptorSets[] = { m_depthPrePass.descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
+				vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_depthPrePass.descriptorSet->getShader()->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
+				vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
+				vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+			}
 		}
-
 		commandBuffer->endRenderPass();
+	}
 
-		// ssao pass
+	void ssaoPass() {
 		commandBuffer->beginRenderpass(m_ssaoPass.pipeline->getRenderPass(), m_ssaoPass.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_ssaoPass.pipeline);
 
@@ -353,48 +348,60 @@ private:
 		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
 
 		commandBuffer->endRenderPass();
+	}
 
-		// shadow pass
+	void shadowPass() {
 		commandBuffer->beginRenderpass(m_shadowData.pipeline->getRenderPass(), m_shadowData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], m_shadowData.resolution, m_shadowData.resolution);
 		commandBuffer->bindPipeline(m_shadowData.pipeline);
 		commandBuffer->updateViewport(m_shadowData.resolution, m_shadowData.resolution);
 
-		for (auto mesh : m_sceneData.model->m_meshes) {
-			if (mesh->m_material == nullptr)
-				continue;
+		for (auto& model : m_drawables) {
+			m_forwardData.shader->pushConstants(commandBuffer->getHandle(), &model->m_modelMatrix);
+			for (auto mesh : model->m_meshes) {
+				if (mesh->m_material == nullptr)
+					continue;
 
-			VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
-			VkDeviceSize offsets[] = { 0 };
-			VkDescriptorSet descriptorSets[] = { m_shadowData.descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
-			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
-			vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+				VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
+				VkDeviceSize offsets[] = { 0 };
+				VkDescriptorSet descriptorSets[] = { m_shadowData.descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
+				vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_shadowData.descriptorSet->getShader()->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
+				vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
+				vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+			}
 		}
 
 		commandBuffer->endRenderPass();
+	}
 
-		// scene pass
-		commandBuffer->beginRenderpass(m_sceneData.pipeline->getRenderPass(), m_sceneData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
-		commandBuffer->bindPipeline(m_sceneData.pipeline);
+	void forwardPass() {
+		commandBuffer->beginRenderpass(m_forwardData.pipeline->getRenderPass(), m_forwardData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
+		commandBuffer->bindPipeline(m_forwardData.pipeline);
 		commandBuffer->updateViewport(1280, 720);
 
-		for (auto mesh : m_sceneData.model->m_meshes) {
-			if (mesh->m_material == nullptr)
-				continue;
+		for (auto& model : m_drawables) {
+			m_forwardData.shader->pushConstants(commandBuffer->getHandle(), &model->m_modelMatrix);
+			for (auto mesh : model->m_meshes) {
+				if (mesh->m_material == nullptr)
+					continue;
 
-			VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
-			VkDeviceSize offsets[] = { 0 };
-			VkDescriptorSet descriptorSets[] = { mesh->m_material->m_descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()) };
-			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->m_material->m_shader->getPipelineLayout(), 0, 1, descriptorSets, 0, nullptr);
-			vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
-			vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
-			vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+				VkBuffer vertexBuffers[] = { mesh->m_vertexBuffer->getHandle() };
+				VkDeviceSize offsets[] = { 0 };
+				VkDescriptorSet descriptorSets[] = {
+					m_forwardData.descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex()),
+					mesh->m_material->m_descriptorSet->getHandle(m_window->getSwapchain()->getCurrentFrameIndex())
+				};
+				
+				vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, mesh->m_material->m_shader->getPipelineLayout(), 0, 2, descriptorSets, 0, nullptr);
+				vkCmdBindVertexBuffers(commandBuffer->getHandle(), 0, 1, vertexBuffers, offsets);
+				vkCmdBindIndexBuffer(commandBuffer->getHandle(), mesh->m_indexBuffer->getHandle(), 0, VK_INDEX_TYPE_UINT32);
+				vkCmdDrawIndexed(commandBuffer->getHandle(), static_cast<uint32_t>(mesh->m_count), 1, 0, 0, 0);
+			}
 		}
-
 		commandBuffer->endRenderPass();
+	}
 
-		// sky box pass
+	void skyBoxPass() {
 		commandBuffer->beginRenderpass(m_skyBoxData.pipeline->getRenderPass(), m_skyBoxData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_skyBoxData.pipeline);
 		commandBuffer->updateViewport(1280, 720);
@@ -404,8 +411,10 @@ private:
 		vkCmdDraw(commandBuffer->getHandle(), 36, 1, 0, 0);
 
 		commandBuffer->endRenderPass();
+	}
 
-		// bloom downsample
+	void bloomPass() {
+		// downsample
 		for (int i = 0; i < mipChainLength; i++) {
 			auto& mip = m_bloomData.mipChain[i];
 			commandBuffer->beginRenderpass(m_bloomData.pipeline->getRenderPass(), m_bloomData.framebuffers[swapchain->getCurrentFrameIndex()][i], mip->getWidth(), mip->getHeight());
@@ -414,11 +423,11 @@ private:
 
 			VkDescriptorSet bloomDescriptorSet = m_bloomData.descriptorSets[i]->getHandle(swapchain->getCurrentFrameIndex());
 			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_bloomData.descriptorSets[i]->getShader()->getPipelineLayout(), 0, 1, &bloomDescriptorSet, 0, nullptr);
-			if(i == 0)
+			if (i == 0)
 				m_bloomData.pushConstant.mode = 0;
 			else
 				m_bloomData.pushConstant.mode = 1;
-			m_bloomData.pushConstant.mipLevel = i-1;
+			m_bloomData.pushConstant.mipLevel = i - 1;
 			m_bloomData.pushConstant.resolution = glm::vec2(mip->getWidth(), mip->getHeight());
 			m_bloomData.descriptorSets[0]->getShader()->pushConstants(commandBuffer->getHandle(), &m_bloomData.pushConstant);
 
@@ -427,25 +436,25 @@ private:
 			commandBuffer->endRenderPass();
 		}
 
-		// bloom upsample
+		// upsample
 		for (int i = mipChainLength; i > 1; i--) {
 			auto& mip = m_bloomData.mipChain[i - 2];
-			commandBuffer->beginRenderpass(m_bloomData.pipeline->getRenderPass(), m_bloomData.framebuffers[swapchain->getCurrentFrameIndex()][i-2], mip->getWidth(), mip->getHeight());
+			commandBuffer->beginRenderpass(m_bloomData.pipeline->getRenderPass(), m_bloomData.framebuffers[swapchain->getCurrentFrameIndex()][i - 2], mip->getWidth(), mip->getHeight());
 			commandBuffer->bindPipeline(m_bloomData.pipeline);
 			commandBuffer->updateViewport(mip->getWidth(), mip->getHeight());
 
 			VkDescriptorSet bloomDescriptorSet = m_bloomData.descriptorSets[i]->getHandle(swapchain->getCurrentFrameIndex());
 			vkCmdBindDescriptorSets(commandBuffer->getHandle(), VK_PIPELINE_BIND_POINT_GRAPHICS, m_bloomData.descriptorSets[i]->getShader()->getPipelineLayout(), 0, 1, &bloomDescriptorSet, 0, nullptr);
 			m_bloomData.pushConstant.mode = 2;
-			m_bloomData.pushConstant.mipLevel = i;
-			m_bloomData.pushConstant.resolution = glm::vec2(mip->getWidth(), mip->getHeight());
 			m_bloomData.descriptorSets[0]->getShader()->pushConstants(commandBuffer->getHandle(), &m_bloomData.pushConstant);
 
 			vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
 
 			commandBuffer->endRenderPass();
 		}
-		// tone mapping pass
+	}
+
+	void toneMapping() {
 		commandBuffer->beginRenderpass(m_toneMappingData.pipeline->getRenderPass(), m_toneMappingData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_toneMappingData.pipeline);
 		commandBuffer->updateViewport(1280, 720);
@@ -454,13 +463,9 @@ private:
 
 		vkCmdDraw(commandBuffer->getHandle(), 3, 1, 0, 0);
 		commandBuffer->endRenderPass();
+	}
 
-		// ImGui rendering
-		//ImGui::Begin("debug");
-		//ImGui::Text("fps: %.1f", 1.f / m_deltaTime);
-		//ImGui::End();
-
-		// post processing pass
+	void finalPass() {
 		commandBuffer->beginRenderpass(m_postProcessData.pipeline->getRenderPass(), m_postProcessData.pipeline->getFramebuffers()[swapchain->getCurrentImageIndex()], 1280, 720);
 		commandBuffer->bindPipeline(m_postProcessData.pipeline);
 		commandBuffer->updateViewport(1280, 720);
@@ -474,69 +479,129 @@ private:
 		//ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer->getHandle());
 
 		commandBuffer->endRenderPass();
+	}
 
-		// end
+	void beginFrame() {
+		glfwPollEvents();
+		swapchain = m_window->getSwapchain();
+		commandBuffer = swapchain->getCurrentCommandBuffer();
+		updateUniformBuffer(swapchain->getCurrentFrameIndex());
+
+		for (auto& mip : m_bloomData.mipChain) {
+			//mip->clear({0,1,0,1});
+			//mip->transitionImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		}
+
+		//m_gui->begin();
+		commandBuffer->getFence()->wait();
+		swapchain->acquireNexImage();
+		commandBuffer->reset();
+		commandBuffer->beginRecording();
+	}
+
+	void endFrame() {
 		commandBuffer->endRecording();
 		commandBuffer->submit();
 		swapchain->present();
 	}
 
+	void guiUpdate() {
+		ImGui::Begin("debug");
+		ImGui::Text("fps: %.1f", 1.f / m_deltaTime);
+		ImGui::Checkbox("SSAO", &m_settings.enableSSAO);
+		ImGui::Checkbox("Bloom", &m_settings.enableBloom);
+		ImGui::Checkbox("Shadow", &m_settings.enableShadow);
+		ImGui::Checkbox("SkyBox", &m_settings.enableSkyBox);
+		ImGui::End();
+	}
+
 	void mainLoop() {
 		while (!glfwWindowShouldClose(m_window->getHandle())) {
-			glfwPollEvents();
+			beginFrame();
 
+			//guiUpdate();
+			depthPrePass();
+			if (m_settings.enableSSAO)
+				ssaoPass();
+			if (m_settings.enableShadow)
+				shadowPass();
+			forwardPass();
+			if (m_settings.enableSkyBox)
+				skyBoxPass();
+			if (m_settings.enableBloom)
+				bloomPass();
+			toneMapping();
+			finalPass();
 
-			drawFrame();
+			endFrame();
 		}
 
 		vkDeviceWaitIdle(Device::getHandle());
-
 	}
-
-private:
-	struct UniformBufferObject {
-		glm::mat4 model;
-		glm::mat4 view;
-		glm::mat4 proj;
-		glm::mat4 lightSpace;
-		glm::vec4 camPos;
-	};
 
 private:
 	std::shared_ptr<Window> m_window;
 	std::shared_ptr<Gui> m_gui;
-	std::vector<UniformBuffer> m_transformUBO;
+	std::vector<UniformBuffer> m_sceneUBO;
+	std::vector<std::shared_ptr<Model>> m_drawables;
+	std::shared_ptr<CommandBuffer> commandBuffer = nullptr;
+	std::shared_ptr<Swapchain> swapchain = nullptr;
+	std::shared_ptr<Texture2D> m_currentTexture = nullptr;
+
+	float m_deltaTime = 0.0f;
+
+	struct Settings {
+		bool enableSSAO = true;
+		bool enableBloom = true;
+		bool enableShadow = true;
+		bool enableSkyBox = true;
+	} m_settings;
+
+	struct SceneDataUBO {
+		struct Light {
+			glm::vec4 color;
+			glm::vec4 position;
+		};
+		Light lights[16];
+		glm::mat4 lightSpace;
+		glm::mat4 view;
+		glm::mat4 proj;
+		glm::vec4 camPos;
+		int lightCount = 2;
+		glm::vec3 padding;
+	} m_sceneData;
 
 	struct DepthPrePass {
 		std::shared_ptr<Texture2D> texture;
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
-	};
+	}  m_depthPrePass;
 
 	struct SSAOPass {
 		std::shared_ptr<Texture2D> texture;
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
-	};
+	} m_ssaoPass;
 
-	struct SceneData {
-		std::shared_ptr<Model> model;
+	struct ForwardData {
+		std::shared_ptr<Shader> shader;
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<Texture2D> colorTexture;
 		std::shared_ptr<Texture2D> resolveTexture;
 		std::shared_ptr<Texture2D> depthTexture;
-	};
+		std::shared_ptr<DescriptorSet> descriptorSet;
+	} m_forwardData;
 
 	struct PostProcessData {
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
-	};
+	} m_postProcessData;
 
 	struct SkyBoxData {
 		std::shared_ptr<CubeMap> cubeMap;
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
-	};
+	}  m_skyBoxData;
 
 	struct ShadowData {
 		std::shared_ptr<Texture2D> texture;
@@ -547,7 +612,7 @@ private:
 		glm::mat4 lightSpace;
 		glm::mat4 lightProjection;
 		glm::mat4 lightView;
-	};
+	} m_shadowData;
 
 	static const uint32_t mipChainLength = 5;
 	struct BloomData {
@@ -561,24 +626,14 @@ private:
 		std::shared_ptr<Framebuffer> framebuffers[MAX_FRAMES_IN_FLIGHT][mipChainLength];
 		std::shared_ptr<Texture2D> mipChain[mipChainLength];
 		std::shared_ptr<DescriptorSet> descriptorSets[mipChainLength+1];
-	};
+	} m_bloomData;
 
 	struct ToneMappingData {
 		std::shared_ptr<Texture2D> texture;
 		std::shared_ptr<Pipeline> pipeline;
 		std::shared_ptr<DescriptorSet> descriptorSet;
-	};
+	} m_toneMappingData;
 
-	PostProcessData m_postProcessData;
-	SceneData m_sceneData;
-	SkyBoxData m_skyBoxData;
-	ShadowData m_shadowData;
-	DepthPrePass m_depthPrePass;
-	SSAOPass m_ssaoPass;
-	BloomData m_bloomData;
-	ToneMappingData m_toneMappingData;
-
-	float m_deltaTime = 0.0f;
 };
 
 int main() {

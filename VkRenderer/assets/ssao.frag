@@ -1,16 +1,10 @@
 #version 450
 
+#include "sceneData.glsl"
+
 layout(location = 0) out vec4 outColor;
 
 layout(location = 0) in vec2 fragUV;
-
-layout(set = 0, binding = 0) uniform UniformBufferObject {
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-    mat4 lightSpace;
-    vec4 camPos;
-} ubo;
 
 layout(set = 0, binding = 1) uniform sampler2D u_depthMap;
 
@@ -56,7 +50,7 @@ vec3 kernel[KERNEL_SIZE] = vec3[](
 
 vec3 getViewPos(vec2 uv, float depth) {
     vec4 clip = vec4(uv * 2.0 - 1.0, depth, 1.0);
-    vec4 view = inverse(ubo.proj) * clip;
+    vec4 view = inverse(u_scene.proj) * clip;
     return view.xyz / view.w;
 }
 
@@ -84,7 +78,7 @@ void main() {
     for (int i = 0; i < KERNEL_SIZE; ++i) {
         vec3 sampleVec = fragPos + kernel[i] * RADIUS;
 
-        vec4 offset = ubo.proj * vec4(sampleVec, 1.0);
+        vec4 offset = u_scene.proj * vec4(sampleVec, 1.0);
         offset.xyz /= offset.w;
         vec2 sampleUV = offset.xy * 0.5 + 0.5;
 

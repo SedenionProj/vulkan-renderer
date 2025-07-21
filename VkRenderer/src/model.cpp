@@ -66,9 +66,10 @@ Model::Model(std::filesystem::path filePath) {
 	std::unordered_map<std::string, std::shared_ptr<Texture2D>> textureCache;
 	m_meshes.reserve(shapes.size());
 
-	auto shader = std::make_shared<Shader>("basicVert.spv", "basicFrag.spv");
+	auto shader = std::make_shared<Shader>("spv/basicVert.spv", "spv/pbrFrag.spv");
 
-	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>(ASSETS_PATH"models/viking_room/viking_room.png"); // todo replace by white tex
+	char pixels[4] = { 255, 255, 255, 255 };
+	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>(pixels,1,1);
 
 	for (const auto& shape : shapes) {
 
@@ -130,7 +131,7 @@ Model::Model(std::filesystem::path filePath) {
 		if (shape.mesh.material_ids[0] > 0) {
 			material = std::make_shared<Material>();
 			material->m_shader = shader;
-			material->m_descriptorSet = std::make_shared<DescriptorSet>(shader, 0);
+			material->m_descriptorSet = std::make_shared<DescriptorSet>(shader, 1);
 
 			material->m_albedo = defaultTexture;
 			material->m_normal = defaultTexture;
@@ -212,16 +213,96 @@ Model::Model(std::filesystem::path filePath) {
 					printf("loaded %s\n", mp->diffuse_texname.c_str());
 				}
 			}
+
+			material->createUniformBuffers();
 			material->m_descriptorSet->setTexture(material->m_albedo, 1);
 			material->m_descriptorSet->setTexture(material->m_specular, 2);
 			material->m_descriptorSet->setTexture(material->m_normal, 3);
-
-			material->createUniformBuffers();
 		}
 
 
-		std::shared_ptr<Mesh> mesh = std::make_unique<Mesh>(vertices, indices, material);
+		std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>(vertices, indices, material);
 		
 		m_meshes.emplace_back(mesh);
 	}
+}
+
+void Model::createCube() {
+	std::vector<Vertex> vertices = {
+		// FRONT (+Z)
+		{{-0.5f, -0.5f,  0.5f}, { 0.0f,  0.0f,  1.0f}, {0.0f, 0.0f}},
+		{{ 0.5f, -0.5f,  0.5f}, { 0.0f,  0.0f,  1.0f}, {1.0f, 0.0f}},
+		{{ 0.5f,  0.5f,  0.5f}, { 0.0f,  0.0f,  1.0f}, {1.0f, 1.0f}},
+		{{-0.5f,  0.5f,  0.5f}, { 0.0f,  0.0f,  1.0f}, {0.0f, 1.0f}},
+
+		// BACK (-Z)
+		{{ 0.5f, -0.5f, -0.5f}, { 0.0f,  0.0f, -1.0f}, {0.0f, 0.0f}},
+		{{-0.5f, -0.5f, -0.5f}, { 0.0f,  0.0f, -1.0f}, {1.0f, 0.0f}},
+		{{-0.5f,  0.5f, -0.5f}, { 0.0f,  0.0f, -1.0f}, {1.0f, 1.0f}},
+		{{ 0.5f,  0.5f, -0.5f}, { 0.0f,  0.0f, -1.0f}, {0.0f, 1.0f}},
+
+		// RIGHT (+X)
+		{{ 0.5f, -0.5f,  0.5f}, { 1.0f,  0.0f,  0.0f}, {0.0f, 0.0f}},
+		{{ 0.5f, -0.5f, -0.5f}, { 1.0f,  0.0f,  0.0f}, {1.0f, 0.0f}},
+		{{ 0.5f,  0.5f, -0.5f}, { 1.0f,  0.0f,  0.0f}, {1.0f, 1.0f}},
+		{{ 0.5f,  0.5f,  0.5f}, { 1.0f,  0.0f,  0.0f}, {0.0f, 1.0f}},
+
+		// LEFT (-X)
+		{{-0.5f, -0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {0.0f, 0.0f}},
+		{{-0.5f, -0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 0.0f}},
+		{{-0.5f,  0.5f,  0.5f}, {-1.0f,  0.0f,  0.0f}, {1.0f, 1.0f}},
+		{{-0.5f,  0.5f, -0.5f}, {-1.0f,  0.0f,  0.0f}, {0.0f, 1.0f}},
+
+		// TOP (+Y)
+		{{-0.5f,  0.5f,  0.5f}, { 0.0f,  1.0f,  0.0f}, {0.0f, 0.0f}},
+		{{ 0.5f,  0.5f,  0.5f}, { 0.0f,  1.0f,  0.0f}, {1.0f, 0.0f}},
+		{{ 0.5f,  0.5f, -0.5f}, { 0.0f,  1.0f,  0.0f}, {1.0f, 1.0f}},
+		{{-0.5f,  0.5f, -0.5f}, { 0.0f,  1.0f,  0.0f}, {0.0f, 1.0f}},
+
+		// BOTTOM (-Y)
+		{{-0.5f, -0.5f, -0.5f}, { 0.0f, -1.0f,  0.0f}, {0.0f, 0.0f}},
+		{{ 0.5f, -0.5f, -0.5f}, { 0.0f, -1.0f,  0.0f}, {1.0f, 0.0f}},
+		{{ 0.5f, -0.5f,  0.5f}, { 0.0f, -1.0f,  0.0f}, {1.0f, 1.0f}},
+		{{-0.5f, -0.5f,  0.5f}, { 0.0f, -1.0f,  0.0f}, {0.0f, 1.0f}},
+	};
+
+	std::vector<uint32_t> indices = {
+		// Front face
+		0, 1, 2,  2, 3, 0,
+
+		// Back face
+		4, 5, 6,  6, 7, 4,
+
+		// Right face
+		8, 9,10, 10,11, 8,
+
+		// Left face
+	   12,13,14, 14,15,12,
+
+	   // Top face
+	  16,17,18, 18,19,16,
+
+	  // Bottom face
+	 20,21,22, 22,23,20
+	};
+
+	char pixels[4] = { 255, 128, 216, 255 };
+	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>(pixels, 1, 1);
+
+	std::shared_ptr<Material> material = std::make_shared<Material>();
+	material->m_albedo = defaultTexture;
+	material->m_normal = defaultTexture;
+	material->m_specular = defaultTexture;
+	material->m_shader = std::make_shared<Shader>("spv/basicVert.spv", "spv/pbrFrag.spv");
+	material->m_properties.brightness = 10.f;
+
+	material->m_descriptorSet = std::make_shared<DescriptorSet>(material->m_shader, 1);
+	material->createUniformBuffers();
+	material->m_descriptorSet->setTexture(material->m_albedo, 1);
+	material->m_descriptorSet->setTexture(material->m_specular, 2);
+	material->m_descriptorSet->setTexture(material->m_normal, 3);
+
+	std::shared_ptr<Mesh> mesh = std::make_shared<Mesh>(vertices, indices, material);
+
+	m_meshes.emplace_back(mesh);
 }
