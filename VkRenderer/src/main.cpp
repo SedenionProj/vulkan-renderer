@@ -159,7 +159,7 @@ private:
 			"skybox/back.jpg"
 		};
 		m_skyBoxData.cubeMap = std::make_shared<CubeMap>(faces);
-		pipelineDesc.shader = std::make_shared<Shader>("spv/cubemapVert.spv", "spv/cubemapFrag.spv");
+		pipelineDesc.shader = std::make_shared<Shader>("spv/cubeMapVert.spv", "spv/cubeMapFrag.spv");
 		pipelineDesc.sampleCount = VK_SAMPLE_COUNT_8_BIT;
 		pipelineDesc.clear = false;
 		pipelineDesc.attachmentInfos = {
@@ -623,7 +623,7 @@ private:
 		};
 		PushConstant pushConstant;
 		std::shared_ptr<Pipeline> pipeline;
-		std::shared_ptr<Framebuffer> framebuffers[MAX_FRAMES_IN_FLIGHT][mipChainLength];
+		std::shared_ptr<Framebuffer> framebuffers[4][mipChainLength];
 		std::shared_ptr<Texture2D> mipChain[mipChainLength];
 		std::shared_ptr<DescriptorSet> descriptorSets[mipChainLength+1];
 	} m_bloomData;
@@ -637,8 +637,9 @@ private:
 };
 
 int main() {
+#if defined(PLATFORM_WINDOWS)
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-
+#endif
 	try {
 		Renderer app;
 		app.run();
@@ -647,7 +648,8 @@ int main() {
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
-
+#if defined(PLATFORM_WINDOWS)
 	_CrtDumpMemoryLeaks();
+#endif
 	return EXIT_SUCCESS;
 }

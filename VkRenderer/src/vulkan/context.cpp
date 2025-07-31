@@ -56,7 +56,7 @@ void Context::createPipelineCache() {
 }
 
 void Context::createInstance() {
-	VK_CHECK(enableValidationLayers && !checkValidationLayerSupport());
+	DEBUG_ASSERT(!enableValidationLayers || checkValidationLayerSupport(), "validation layer not supported");
 
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;

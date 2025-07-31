@@ -68,7 +68,7 @@ Model::Model(std::filesystem::path filePath) {
 
 	auto shader = std::make_shared<Shader>("spv/basicVert.spv", "spv/pbrFrag.spv");
 
-	char pixels[4] = { 255, 255, 255, 255 };
+	uint8_t pixels[4] = { 255, 255, 255, 255 };
 	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>(pixels,1,1);
 
 	for (const auto& shape : shapes) {
@@ -286,7 +286,7 @@ void Model::createCube() {
 	 20,21,22, 22,23,20
 	};
 
-	char pixels[4] = { 255, 128, 216, 255 };
+	uint8_t pixels[4] = { 255, 128, 216, 255 };
 	std::shared_ptr<Texture2D> defaultTexture = std::make_shared<Texture2D>(pixels, 1, 1);
 
 	std::shared_ptr<Material> material = std::make_shared<Material>();

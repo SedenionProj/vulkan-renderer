@@ -15,7 +15,7 @@
 	url = https://github.com/KhronosGroup/SPIRV-Cross
 [submodule "VkRenderer/vendor/volk"]
 	path = VkRenderer/vendor/volk
-	url = https://github.com/zeux/volk.git
+	url = https://github.com/zeux/volk
 [submodule "VkRenderer/vendor/imgui"]
 	path = VkRenderer/vendor/imgui
 	url = https://github.com/ocornut/imgui

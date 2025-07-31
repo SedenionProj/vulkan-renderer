@@ -1,6 +1,8 @@
 #define _CRTDBG_MAP_ALLOC
 #include <cstdlib>
-#include <crtdbg.h>
+#if defined(PLATFORM_WINDOWS)
+    #include <crtdbg.h>
+#endif
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -13,6 +15,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <cstring>
 
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_ENABLE_EXPERIMENTAL

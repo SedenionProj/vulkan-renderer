@@ -4,7 +4,7 @@
 #include "src/vulkan/shader.hpp"
 #include "src/vulkan/renderPass.hpp"
 #include "src/vulkan/swapchain.hpp"
-#include "src/vulkan/Texture.hpp"
+#include "src/vulkan/texture.hpp"
 
 Pipeline::Pipeline(const PipelineDesc& info)
 	: m_shader(info.shader) {
@@ -16,7 +16,7 @@ Pipeline::Pipeline(const PipelineDesc& info)
 	bool hasDepth = false;
 
 	if (info.createFramebuffers) {
-		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		for (int i = 0; i < 4; i++) {
 			std::vector<std::shared_ptr<Texture>> textures;
 
 			for (auto& attachmentInfo : info.attachmentInfos) {
